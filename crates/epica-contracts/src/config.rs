@@ -288,7 +288,7 @@ max_tokens_per_session = 50000
         // environment missing → hard invariant violated
         assert!(contract.check_invariants(&quad, None).is_some());
 
-        quad.insert(BeliefNode::new(
+        let env_id = quad.insert(BeliefNode::new(
             "environment",
             BeliefValue::Asserted("staging".into()),
             Provenance::UserStatement { turn: 0 },
@@ -297,13 +297,14 @@ max_tokens_per_session = 50000
         // environment >= 0.5 → hard invariant satisfied (soft user_goal skipped)
         assert!(contract.check_invariants(&quad, None).is_none());
 
-        // Drop environment confidence below threshold
-        quad.insert(BeliefNode::new(
-            "environment",
+        // Drop environment confidence below threshold via AGM revision.
+        // (A second `insert()` would create a duplicate node with the same key — use `revise()`.)
+        quad.revise(
+            env_id,
             BeliefValue::Asserted("unknown".into()),
-            Provenance::UserStatement { turn: 0 },
+            Provenance::UserStatement { turn: 1 },
             0.1,
-        ));
+        ).expect("revision must succeed");
         assert!(contract.check_invariants(&quad, None).is_some());
     }
 

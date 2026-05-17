@@ -6,7 +6,9 @@ pub struct GovernancePolicies {
     pub max_tokens_per_session: Option<u64>,
     pub max_tool_calls_per_belief: Option<u32>,
     /// Belief keys that require explicit human approval before the agent acts on them.
+    #[serde(default)]
     pub require_human_approval: Vec<String>,
+    #[serde(default)]
     pub audit_trail: AuditPolicy,
 }
 
