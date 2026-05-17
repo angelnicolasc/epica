@@ -10,6 +10,7 @@
 
 #![allow(missing_docs)]
 
+#[cfg(feature = "neo4j")]
 pub mod neo4j;
 pub mod store;
 pub mod types;
