@@ -1,0 +1,27 @@
+[package]
+name        = "epica-anthropic"
+description = "AnthropicLlmClient: System 2 (UAR) via Anthropic Messages API with tool_use structured output"
+version.workspace    = true
+edition.workspace    = true
+rust-version.workspace = true
+license.workspace    = true
+authors.workspace    = true
+repository.workspace = true
+keywords.workspace   = true
+categories.workspace = true
+
+[features]
+default = []
+
+[dependencies]
+epica-runtime = { path = "../epica-runtime", features = ["system2"] }
+reqwest       = { workspace = true }
+serde.workspace        = true
+serde_json.workspace   = true
+tokio.workspace        = true
+async-trait.workspace  = true
+thiserror.workspace    = true
+tracing.workspace      = true
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["test-util"] }

@@ -1,0 +1,32 @@
+[package]
+name        = "epica"
+description = "Epica: embeddable Rust runtime for formal causal belief revision in LLM agents (facade crate)"
+version.workspace    = true
+edition.workspace    = true
+rust-version.workspace = true
+license.workspace    = true
+authors.workspace    = true
+repository.workspace = true
+keywords.workspace   = true
+categories.workspace = true
+
+[features]
+default   = ["core", "runtime"]
+core      = ["dep:epica-core"]
+runtime   = ["dep:epica-runtime"]
+contracts = ["dep:epica-contracts"]
+macros    = ["dep:epica-macros"]
+mcp       = ["dep:epica-mcp"]
+memory    = ["dep:epica-memory"]
+full      = ["core", "runtime", "contracts", "macros", "mcp", "memory"]
+
+[dependencies]
+epica-core      = { path = "../crates/epica-core",      optional = true }
+epica-runtime   = { path = "../crates/epica-runtime",   optional = true }
+epica-contracts = { path = "../crates/epica-contracts", optional = true }
+epica-macros    = { path = "../crates/epica-macros",    optional = true }
+epica-mcp       = { path = "../crates/epica-mcp",       optional = true }
+epica-memory    = { path = "../crates/epica-memory",    optional = true }
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["test-util"] }

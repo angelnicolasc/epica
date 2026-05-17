@@ -1,0 +1,44 @@
+[build-system]
+requires      = ["maturin>=1.7,<2.0"]
+build-backend = "maturin"
+
+[project]
+name        = "epica"
+version     = "0.6.0"
+description = "Epistemic Causal Agent Belief Runtime — Rust-powered formal belief revision for LLM agents"
+requires-python = ">=3.10"
+license     = { text = "MIT OR Apache-2.0" }
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Science/Research",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Rust",
+    "Typing :: Typed",
+]
+
+[project.optional-dependencies]
+anthropic  = ["anthropic>=0.40.0"]
+langchain  = ["langchain-core>=0.3.0"]
+dev        = [
+    "pytest>=8.0",
+    "pytest-asyncio>=0.23",
+    "mypy>=1.10",
+    "anthropic>=0.40.0",
+    "langchain-core>=0.3.0",
+]
+
+[tool.maturin]
+features      = ["pyo3/extension-module"]
+module-name   = "epica._epica"
+manifest-path = "Cargo.toml"
+python-source = "python"
+
+[tool.pytest.ini_options]
+testpaths    = ["tests"]
+asyncio_mode = "auto"

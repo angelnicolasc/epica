@@ -1,0 +1,30 @@
+[package]
+name        = "epica-memory"
+description = "LongTermMemoryStore trait and Redis/Neo4j reference implementations for Epica"
+version.workspace    = true
+edition.workspace    = true
+rust-version.workspace = true
+license.workspace    = true
+authors.workspace    = true
+repository.workspace = true
+keywords             = ["memory", "long-term", "belief-revision", "redis", "epica"]
+categories           = ["database", "asynchronous"]
+
+[features]
+default = []
+redis   = ["dep:redis"]
+neo4j   = [] # official Rust Neo4j driver pending; stub compiles without it
+
+[dependencies]
+epica-core.path       = "../epica-core"
+epica-contracts.path  = "../epica-contracts"
+tokio.workspace       = true
+serde.workspace       = true
+serde_json.workspace  = true
+thiserror.workspace   = true
+tracing.workspace     = true
+async-trait.workspace = true
+redis = { workspace = true, optional = true }
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["test-util"] }

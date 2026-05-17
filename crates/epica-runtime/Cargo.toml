@@ -1,0 +1,32 @@
+[package]
+name        = "epica-runtime"
+description = "BeliefRuntime: System 2 dual-process uncertainty, async update_belief, Trajectory-ECE, retrieval"
+version.workspace    = true
+edition.workspace    = true
+rust-version.workspace = true
+license.workspace    = true
+authors.workspace    = true
+repository.workspace = true
+keywords.workspace   = true
+categories.workspace = true
+
+[features]
+default = ["system2"]
+# Enables the LLMClient trait + System 2 activation (requires network / async LLM calls)
+system2 = ["dep:async-trait"]
+
+[dependencies]
+epica-core.path        = "../epica-core"
+epica-contracts.path   = "../epica-contracts"
+tokio.workspace        = true
+serde.workspace        = true
+serde_json.workspace   = true
+thiserror.workspace    = true
+tracing.workspace      = true
+uuid.workspace         = true
+governor.workspace     = true
+async-trait            = { workspace = true, optional = true }
+
+[dev-dependencies]
+tokio    = { workspace = true, features = ["test-util"] }
+proptest.workspace = true

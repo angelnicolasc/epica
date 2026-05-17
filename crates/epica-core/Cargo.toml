@@ -1,0 +1,50 @@
+[package]
+name        = "epica-core"
+description = "BeliefQuad core: four orthogonal graphs, AGM belief revision (K*2-K*6), System 1 propagation, diff/checkpoint/rollback"
+version.workspace    = true
+edition.workspace    = true
+rust-version.workspace = true
+license.workspace    = true
+authors.workspace    = true
+repository.workspace = true
+keywords.workspace   = true
+categories.workspace = true
+
+[dependencies]
+slotmap.workspace       = true
+uuid.workspace          = true
+serde.workspace         = true
+serde_json.workspace    = true
+petgraph.workspace      = true
+thiserror.workspace     = true
+tracing.workspace       = true
+ordered-float.workspace = true
+
+[dev-dependencies]
+proptest.workspace   = true
+criterion.workspace  = true
+uuid.workspace       = true
+serde_json.workspace = true
+
+[[bench]]
+name    = "belief_quad_throughput"
+path    = "../../benches/belief_quad_throughput.rs"
+harness = false
+
+[[bench]]
+name    = "system1_propagation"
+path    = "../../benches/system1_propagation.rs"
+harness = false
+
+[[bench]]
+name    = "checkpoint_rollback"
+path    = "../../benches/checkpoint_rollback.rs"
+harness = false
+
+[[example]]
+name = "minimal_revision"
+path = "../../examples/minimal_revision.rs"
+
+[[example]]
+name = "codebase_agent"
+path = "../../examples/codebase_agent.rs"

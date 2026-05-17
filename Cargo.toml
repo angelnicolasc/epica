@@ -1,0 +1,108 @@
+[workspace]
+resolver = "2"
+members = [
+    "epica",
+    "crates/epica-core",
+    "crates/epica-runtime",
+    "crates/epica-anthropic",
+    "crates/epica-contracts",
+    "crates/epica-macros",
+    "crates/epica-mcp",
+    "crates/epica-memory",
+    "crates/epica-python",
+]
+default-members = [
+    "epica",
+    "crates/epica-core",
+    "crates/epica-runtime",
+    "crates/epica-anthropic",
+    "crates/epica-contracts",
+    "crates/epica-macros",
+    "crates/epica-mcp",
+    "crates/epica-memory",
+]
+
+[workspace.package]
+version      = "0.1.0"
+edition      = "2021"
+rust-version = "1.82"
+license      = "MIT OR Apache-2.0"
+authors      = ["Epica Contributors"]
+repository   = "https://github.com/your-org/epica"
+homepage     = "https://github.com/your-org/epica"
+keywords     = ["belief-revision", "agm", "causal-reasoning", "llm-agents", "runtime"]
+categories   = ["science", "data-structures", "asynchronous"]
+
+[workspace.dependencies]
+# Core data structures
+slotmap        = { version = "1.0", features = ["serde"] }
+uuid           = { version = "1.10", features = ["v4", "serde"] }
+serde          = { version = "1.0", features = ["derive"] }
+serde_json     = "1.0"
+indexmap       = { version = "2.3", features = ["serde"] }
+petgraph       = { version = "0.6", features = ["serde-1"] }
+
+# Async
+tokio          = { version = "1.40", features = ["full"] }
+async-trait    = "0.1"
+
+# Error handling
+thiserror      = "2.0"
+anyhow         = "1.0"
+
+# Logging / tracing
+tracing        = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
+
+# Math / numerics
+ordered-float  = "4.2"
+
+# Serialization extras
+toml           = "0.8"
+
+# Testing
+proptest       = "1.5"
+criterion      = { version = "0.5", features = ["html_reports"] }
+
+# Proc-macro dependencies (only for epica-macros)
+syn            = { version = "2.0", features = ["full"] }
+quote          = "1.0"
+proc-macro2    = "1.0"
+
+# HTTP (epica-mcp)
+axum           = { version = "0.7", features = ["macros"] }
+tower          = "0.5"
+tower-http     = { version = "0.6", features = ["trace", "cors"] }
+hyper          = { version = "1.4", features = ["full"] }
+
+# Rate limiting
+governor       = "0.6"
+
+# Auth
+jsonwebtoken   = "9"
+rsa            = { version = "0.9", features = ["pkcs8", "pkcs1", "pem"] }
+
+# Async utilities
+futures-util   = "0.3"
+
+# Observability — metrics + Prometheus
+metrics                      = "0.23"
+metrics-exporter-prometheus  = "0.15"
+
+# HTTP client (epica-anthropic)
+reqwest        = { version = "0.12", features = ["json"] }
+
+# Redis (epica-memory, optional)
+redis          = { version = "0.26", features = ["tokio-comp", "aio"] }
+
+# PyO3 (epica-python)
+pyo3           = { version = "0.22", features = ["extension-module"] }
+
+[profile.release]
+lto            = "thin"
+codegen-units  = 1
+strip          = "debuginfo"
+
+[profile.bench]
+inherits = "release"
+debug    = true

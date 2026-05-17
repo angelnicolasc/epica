@@ -1,0 +1,47 @@
+[package]
+name        = "epica-mcp"
+description = "MCP 2026 server for Epica: Tasks primitive SEP-1686, Server Cards, OAuth 2.1, all belief endpoints"
+version.workspace    = true
+edition.workspace    = true
+rust-version.workspace = true
+license.workspace    = true
+authors.workspace    = true
+repository.workspace = true
+keywords             = ["mcp", "belief-revision", "llm-agents", "http-server", "epica"]
+categories           = ["web-programming::http-server", "asynchronous"]
+
+[features]
+default = ["server"]
+server  = ["dep:axum", "dep:tower", "dep:tower-http", "dep:hyper"]
+
+[dependencies]
+epica-core.path      = "../epica-core"
+epica-runtime.path   = "../epica-runtime"
+epica-contracts.path = "../epica-contracts"
+tokio.workspace      = true
+serde.workspace      = true
+serde_json.workspace = true
+thiserror.workspace  = true
+tracing.workspace            = true
+tracing-subscriber.workspace = true
+uuid.workspace               = true
+futures-util.workspace       = true
+jsonwebtoken.workspace       = true
+metrics.workspace                     = true
+metrics-exporter-prometheus.workspace = true
+governor   = { workspace = true }
+rsa        = { workspace = true }
+axum       = { workspace = true, optional = true }
+tower      = { workspace = true, optional = true }
+tower-http = { workspace = true, optional = true }
+hyper      = { workspace = true, optional = true }
+
+[[bin]]
+name              = "epica-serve"
+path              = "src/main.rs"
+required-features = ["server"]
+
+[dev-dependencies]
+axum  = { workspace = true }
+tokio = { workspace = true, features = ["test-util"] }
+rand  = "0.8"

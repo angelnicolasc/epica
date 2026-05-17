@@ -1,0 +1,28 @@
+[package]
+name        = "epica-macros"
+description = "#[derive(BeliefState)] proc macro for Epica belief state types"
+version.workspace    = true
+edition.workspace    = true
+rust-version.workspace = true
+license.workspace    = true
+authors.workspace    = true
+repository.workspace = true
+keywords.workspace   = true
+categories           = ["development-tools::procedural-macro-attributes"]
+
+[lib]
+proc-macro = true
+
+[dependencies]
+syn.workspace       = true
+quote.workspace     = true
+proc-macro2.workspace = true
+
+[dev-dependencies]
+trybuild        = { version = "1.0", features = ["diff"] }
+epica-core      = { path = "../epica-core" }
+epica-contracts = { path = "../epica-contracts" }
+serde.workspace      = true
+serde_json.workspace = true
+uuid.workspace       = true
+tokio           = { version = "1.40", features = ["rt", "macros"] }

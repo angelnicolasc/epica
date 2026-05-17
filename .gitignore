@@ -1,0 +1,40 @@
+# Build artifacts
+/target/
+/crates/*/target/
+*.d
+
+# Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+*.orig
+.DS_Store
+Thumbs.db
+
+# Env
+.env
+.env.local
+
+# Python build artifacts
+__pycache__/
+*.py[cod]
+*.so
+*.pyd
+dist/
+*.egg-info/
+.venv/
+.python-version
+crates/epica-python/target/
+*.whl
+
+# Criterion benchmark output (raw data only)
+criterion/
+
+# Test artifacts
+test_out.txt
+
+# ── INTERNAL: excluded from public git ───────────────────────────────────────
+Research/
+DEVLOG.md
+# ─────────────────────────────────────────────────────────────────────────────

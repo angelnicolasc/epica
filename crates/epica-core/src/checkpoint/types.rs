@@ -1,0 +1,71 @@
+use std::time::{SystemTime, UNIX_EPOCH};
+
+use serde::{Deserialize, Serialize};
+use uuid::Uuid;
+
+use crate::quad::BeliefQuad;
+
+/// Opaque identifier for a [`BeliefQuadCheckpoint`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct CheckpointId(Uuid);
+
+impl CheckpointId {
+    pub fn new() -> Self {
+        Self(Uuid::new_v4())
+    }
+}
+
+impl Default for CheckpointId {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl CheckpointId {
+    /// Parse from the wire format `"chk:{uuid}"` or bare `"{uuid}"`.
+    pub fn parse(s: &str) -> Option<Self> {
+        let uuid_str = s.strip_prefix("chk:").unwrap_or(s);
+        Uuid::parse_str(uuid_str).ok().map(Self)
+    }
+
+    pub fn as_uuid(&self) -> Uuid {
+        self.0
+    }
+}
+
+impl std::fmt::Display for CheckpointId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "chk:{}", self.0)
+    }
+}
+
+/// An immutable snapshot of the [`BeliefQuad`] at a specific version.
+///
+/// The `quad` is boxed to break the recursive size: `BeliefQuad` contains
+/// `Vec<BeliefQuadCheckpoint>` which would otherwise be infinitely sized.
+#[derive(Debug, Clone)]
+pub struct BeliefQuadCheckpoint {
+    pub id: CheckpointId,
+    pub version: u64,
+    pub timestamp_ms: u64,
+    /// The full quad state at checkpoint time, boxed to break the recursive type.
+    pub quad: Box<BeliefQuad>,
+}
+
+impl BeliefQuadCheckpoint {
+    pub fn capture(quad: &BeliefQuad) -> Self {
+        let now_ms = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_millis() as u64;
+
+        Self {
+            id: CheckpointId::new(),
+            version: quad.version(),
+            timestamp_ms: now_ms,
+            // Clone the quad; the clone's own checkpoints vec is preserved
+            // (historical checkpoints stay accessible after rollback)
+            quad: Box::new(quad.clone()),
+        }
+    }
+}

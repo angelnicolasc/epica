@@ -1,0 +1,25 @@
+[package]
+name        = "epica-python"
+description = "PyO3 Python bindings for Epica — pip install epica"
+version.workspace    = true
+edition.workspace    = true
+rust-version.workspace = true
+license.workspace    = true
+authors.workspace    = true
+repository.workspace = true
+keywords             = ["python", "pyo3", "belief-revision", "llm-agents", "epica"]
+categories           = ["api-bindings"]
+
+[lib]
+name       = "epica"
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+epica-core.path      = "../epica-core"
+epica-runtime.path   = "../epica-runtime"
+epica-contracts.path = "../epica-contracts"
+pyo3.workspace       = true
+tokio.workspace      = true
+serde.workspace      = true
+serde_json.workspace = true
+uuid.workspace       = true
