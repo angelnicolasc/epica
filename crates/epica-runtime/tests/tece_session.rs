@@ -5,7 +5,7 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use epica_core::{BeliefNode, BeliefQuad, BeliefValue, Provenance};
 use epica_runtime::{
-    BeliefRuntime, DiagnosticSignal, LlmClient, LlmClientError, System2Result,
+    BeliefRuntime, DiagnosticSignal, LlmClient, LlmClientError, RuntimeUpdateResult, System2Result,
 };
 
 fn rt() -> BeliefRuntime {
@@ -110,17 +110,31 @@ async fn history_records_system2_revised_confidence() {
         .with_llm_client(Arc::new(FixedClient(revised)));
 
     let id = rt.insert_belief(asserted("k", 0.5)).await;
-    // fast=0.9 → divergence 0.4 > 0.15 → System 2 fires, records 0.95
-    rt.update_belief(
+
+    // fast=0.9 → divergence 0.4 > 0.15 → System 2 eligible → System2Pending.
+    // S-2 fix: update_belief() returns Pending; the LLM is not called inline.
+    let result = rt.update_belief(
         id,
         BeliefValue::Asserted("v".into()),
         Provenance::UserStatement { turn: 1 },
         0.9,
     ).await.unwrap();
 
+    // Simulate handler flow: consume budget → call LLM → apply result.
+    // apply_system2_result() *replaces* (not appends) the fast-confidence entry,
+    // so the history contains one data point at 0.95 rather than two at 0.9 + 0.95.
+    let signal = match result {
+        RuntimeUpdateResult::System2Pending { signal } => signal,
+        _ => panic!("expected System2Pending, got {result:?}"),
+    };
+    let consumed = rt.try_consume_system2_budget().await;
+    assert!(consumed, "budget should be available");
+    let llm_result = rt.llm_client_arc().unwrap().reflect(&signal).await.unwrap();
+    rt.apply_system2_result(id, llm_result.revised_confidence).await;
+
     rt.finalize_session().await;
     let tece = rt.compute_tece().await.expect("should be computable");
-    // History recorded revised=0.95; after finalize, was_correct=true.
+    // History has one entry: revised=0.95, was_correct=true (after finalize).
     // T-ECE = |0.95 - 1.0| = 0.05
     assert!(
         (tece - 0.05).abs() < 1e-4,

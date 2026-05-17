@@ -8,3 +8,5 @@ mod k4_vacuity;
 mod k5_consistency;
 #[path = "agm_postulates/k6_extensionality.rs"]
 mod k6_extensionality;
+#[path = "agm_postulates/minimality.rs"]
+mod minimality;
