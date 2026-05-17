@@ -64,6 +64,18 @@ impl ConfidenceHistory {
         }
     }
 
+    /// Replace the confidence of the most recent record for `id`.
+    ///
+    /// Called by `apply_system2_result()` to supersede the fast confidence
+    /// that was pushed by `update_belief()` when System 2 was triggered.
+    /// The revised System 2 confidence replaces — rather than appends to —
+    /// the trajectory, so T-ECE reflects the recalibrated estimate.
+    pub fn replace_last_confidence(&mut self, id: BeliefId, confidence: f32) {
+        if let Some(r) = self.records.iter_mut().rev().find(|r| r.belief_id == id) {
+            r.confidence = confidence;
+        }
+    }
+
     /// Mark all records with an unknown outcome as correct.
     ///
     /// Call at session end: beliefs that survived the full session without

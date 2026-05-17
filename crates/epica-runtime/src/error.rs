@@ -6,10 +6,21 @@ pub enum RuntimeUpdateResult {
     /// System 1 ran; System 2 was not triggered.
     System1Only,
 
-    /// System 2 was activated and completed.
+    /// System 2 was activated and completed synchronously (legacy; not used in server mode).
     System2Activated {
         diagnostic: crate::system2::DiagnosticSignal,
         result: crate::system2::System2Result,
+    },
+
+    /// System 2 eligibility confirmed; budget NOT yet consumed.
+    ///
+    /// The caller (MCP handler) must:
+    /// 1. Consume one budget token via `runtime.try_consume_system2_budget()`.
+    /// 2. Spawn an async task: call LLM, then `runtime.apply_system2_result()`.
+    /// 3. Refund via `runtime.release_system2_budget()` if the LLM call fails.
+    #[cfg(feature = "system2")]
+    System2Pending {
+        signal: crate::system2::DiagnosticSignal,
     },
 
     /// System 2 was triggered but the budget was exhausted.

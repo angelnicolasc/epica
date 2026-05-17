@@ -45,6 +45,14 @@ impl TokenBucket {
         }
     }
 
+    /// Return `tokens` to the bucket (refund), capped at capacity.
+    ///
+    /// Called when a System 2 LLM call fails after budget was already consumed,
+    /// so that a transient network error does not permanently drain the session budget.
+    pub fn release(&mut self, tokens: u32) {
+        self.available = (self.available + tokens as f32).min(self.capacity as f32);
+    }
+
     /// Available token count (floor, since fractional tokens cannot be consumed).
     pub fn available(&self) -> u32 {
         self.available as u32

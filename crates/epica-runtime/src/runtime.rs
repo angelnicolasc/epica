@@ -75,6 +75,11 @@ pub struct BeliefRuntime {
     #[cfg(feature = "system2")]
     pub(crate) llm_client: Option<Arc<dyn LlmClient>>,
 
+    /// Global default τ for System 2 activation, applied to any node whose
+    /// `reflection_threshold` has not been overridden via `.with_reflection_threshold()`.
+    /// Configurable at runtime via `EPICA_REFLECTION_THRESHOLD` env var.
+    pub(crate) default_reflection_threshold: f32,
+
     /// Phase 4: text embedder for prospective retrieval (TD-001).
     pub(crate) embedder: Option<Arc<dyn Embedder>>,
 
@@ -109,9 +114,19 @@ impl BeliefRuntime {
             governance_tracker: GovernanceTracker::new(),
             #[cfg(feature = "system2")]
             llm_client: None,
+            default_reflection_threshold: DEFAULT_REFLECTION_THRESHOLD,
             embedder: None,
             prospective_client: None,
         }
+    }
+
+    /// Override the default System 2 activation threshold τ for all new beliefs.
+    ///
+    /// Beliefs created after this call inherit the new default. Beliefs already
+    /// in the quad retain their per-node τ unless updated explicitly.
+    pub fn with_default_tau(mut self, tau: f32) -> Self {
+        self.default_reflection_threshold = tau.clamp(0.0, 1.0);
+        self
     }
 
     /// Attach an `LlmClient` for System 2 reflection calls.
@@ -318,20 +333,11 @@ impl BeliefRuntime {
         let per_node_tau = self.quad.read().await
             .get(id)
             .map(|n| n.reflection_threshold)
-            .unwrap_or(DEFAULT_REFLECTION_THRESHOLD);
+            .unwrap_or(self.default_reflection_threshold);
 
         #[cfg(feature = "system2")]
         if should_activate_system2(fast_conf, self.reliability_baseline, per_node_tau) {
-            // Clone the Arc so we don't hold a borrow on self across await points.
-            if let Some(client) = self.llm_client.clone() {
-                let has_budget = self.reflection_budget.lock().await.try_consume(1);
-                if !has_budget {
-                    self.system2_throttled.fetch_add(1, Ordering::Relaxed);
-                    // Push fast confidence; System 2 was desired but throttled.
-                    self.confidence_history.write().await.push(id, fast_conf);
-                    return Ok(RuntimeUpdateResult::System2Throttled);
-                }
-
+            if self.llm_client.is_some() {
                 let belief_key = self.quad.read().await
                     .get(id)
                     .map(|n| n.key.clone())
@@ -344,32 +350,60 @@ impl BeliefRuntime {
                     divergence: (fast_conf - self.reliability_baseline).abs(),
                 };
 
-                let result = client.reflect(&signal).await?;
-
-                // Write slow_confidence back to the node.
-                {
-                    let mut quad = self.quad.write().await;
-                    if let Some(node) = quad.get_mut(id) {
-                        node.slow_confidence = Some(result.revised_confidence);
-                    }
-                }
-
-                self.system2_activations.fetch_add(1, Ordering::Relaxed);
-
-                // Record the System 2 revised confidence — it supersedes fast.
-                self.confidence_history.write().await
-                    .push(id, result.revised_confidence);
-
-                return Ok(RuntimeUpdateResult::System2Activated {
-                    diagnostic: signal,
-                    result,
-                });
+                // Return System2Pending — the caller spawns the LLM task.
+                // Budget is NOT consumed here; the caller must do so before spawning
+                // and refund via release_system2_budget() on LLM failure.
+                self.confidence_history.write().await.push(id, fast_conf);
+                return Ok(RuntimeUpdateResult::System2Pending { signal });
             }
         }
 
         // ── 4. Append fast confidence (System 1 only path) ───────────────────
         self.confidence_history.write().await.push(id, fast_conf);
         Ok(RuntimeUpdateResult::System1Only)
+    }
+
+    /// Write the System 2 revised confidence back to a belief node and record it.
+    ///
+    /// Called from the MCP handler's spawned async task after the LLM responds.
+    /// Increments `system2_activations` and **replaces** (not appends) the fast
+    /// confidence entry that `update_belief()` pushed when returning `System2Pending`.
+    /// This keeps each belief revision as a single T-ECE data point: the LLM's
+    /// recalibrated estimate, not a duplicate fast+slow pair.
+    #[cfg(feature = "system2")]
+    pub async fn apply_system2_result(&self, id: BeliefId, revised_confidence: f32) {
+        {
+            let mut quad = self.quad.write().await;
+            if let Some(node) = quad.get_mut(id) {
+                node.slow_confidence = Some(revised_confidence);
+            }
+        }
+        self.system2_activations.fetch_add(1, Ordering::Relaxed);
+        self.confidence_history.write().await.replace_last_confidence(id, revised_confidence);
+    }
+
+    /// Try to consume one System 2 budget token. Returns `false` if exhausted.
+    pub async fn try_consume_system2_budget(&self) -> bool {
+        self.reflection_budget.lock().await.try_consume(1)
+    }
+
+    /// Refund one System 2 budget token (called when the LLM call fails).
+    pub async fn release_system2_budget(&self) {
+        self.reflection_budget.lock().await.release(1);
+    }
+
+    /// Record a System 2 throttle event (budget exhausted, LLM call skipped).
+    ///
+    /// Call this from the MCP handler when `try_consume_system2_budget()` returns
+    /// `false` after receiving `System2Pending` from `update_belief()`.
+    pub async fn record_system2_throttle(&self) {
+        self.system2_throttled.fetch_add(1, Ordering::Relaxed);
+    }
+
+    /// Access the LLM client for use in spawned async tasks.
+    #[cfg(feature = "system2")]
+    pub fn llm_client_arc(&self) -> Option<Arc<dyn LlmClient>> {
+        self.llm_client.clone()
     }
 
     // ── Session metrics ───────────────────────────────────────────────────────
