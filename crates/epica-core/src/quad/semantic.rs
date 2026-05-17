@@ -108,14 +108,26 @@ impl SemanticGraph {
 
     /// Phase 1 value-level contradiction check.
     ///
-    /// Returns `true` if `new_value` directly contradicts the existing value of
-    /// `id` in `current_value`. Semantic embedding-based contradiction is TD-003
-    /// (Phase 4).
+    /// Returns `true` if `new_value` directly contradicts the existing value on a
+    /// same-ID update (different value → the belief has changed). This detects
+    /// structural contradiction on a single belief: not semantic contradiction
+    /// between two distinct beliefs.
+    ///
+    /// **Scope**: same-ID structural comparison only. Cross-belief semantic
+    /// contradiction (paraphrases, negations, synonyms across distinct beliefs)
+    /// requires explicit `SemanticEdge::Contradicts` edges or Phase 4 embedding
+    /// integration (TD-003).
+    ///
+    /// `Asserted` strings are normalized (lowercase, trimmed) before comparison to
+    /// prevent false-positive contradictions when the same fact is restated with
+    /// minor formatting differences.
     pub fn value_contradicts(current_value: &BeliefValue, new_value: &BeliefValue) -> bool {
         match (current_value, new_value) {
             (BeliefValue::Deterministic(a), BeliefValue::Deterministic(b)) => a != b,
             (BeliefValue::Inferred(a), BeliefValue::Inferred(b)) => a != b,
-            (BeliefValue::Asserted(a), BeliefValue::Asserted(b)) => a != b,
+            (BeliefValue::Asserted(a), BeliefValue::Asserted(b)) => {
+                a.trim().to_lowercase() != b.trim().to_lowercase()
+            }
             (BeliefValue::Reference(a), BeliefValue::Reference(b)) => a != b,
             // Cross-variant changes are treated as contradictions
             _ => true,

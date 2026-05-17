@@ -59,13 +59,21 @@ impl BeliefQuadCheckpoint {
             .unwrap_or_default()
             .as_millis() as u64;
 
+        // Clone the quad but strip its nested checkpoints.
+        //
+        // Without this, every checkpoint recursively embeds all previous
+        // checkpoints, producing 2^n nested clones after n update_belief()
+        // calls — exponential memory and a stack-overflow on drop.
+        // Historical checkpoints remain accessible on the *live* BeliefQuad;
+        // individual snapshots don't need their own sub-history.
+        let mut snap = quad.clone();
+        snap.checkpoints.clear();
+
         Self {
             id: CheckpointId::new(),
             version: quad.version(),
             timestamp_ms: now_ms,
-            // Clone the quad; the clone's own checkpoints vec is preserved
-            // (historical checkpoints stay accessible after rollback)
-            quad: Box::new(quad.clone()),
+            quad: Box::new(snap),
         }
     }
 }
