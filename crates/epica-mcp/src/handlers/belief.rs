@@ -91,29 +91,89 @@ pub async fn handle_belief_set(
             .map_err(|e| McpError::Runtime(e.to_string()))?;
 
         match result {
+            // Legacy sync path (used in direct / test scenarios without the server).
             epica_runtime::RuntimeUpdateResult::System2Activated { result: sys2, .. } => {
                 metrics::counter!(names::BELIEF_UPDATES, "system2" => "true").increment(1);
                 metrics::counter!(names::SYSTEM2_ACTIVATIONS).increment(1);
 
                 let task_id = Uuid::new_v4();
-                let now_ms = std::time::SystemTime::now()
-                    .duration_since(std::time::UNIX_EPOCH)
-                    .unwrap_or_default()
-                    .as_millis() as u64;
-
-                let task = McpTask {
+                let now_ms = now_ms();
+                state.task_store.lock().await.insert(McpTask {
                     task_id,
                     belief_key: req.key.clone(),
-                    // System 2 ran synchronously in the runtime — the task is already complete.
                     status: TaskStatus::Completed {
                         result: serde_json::json!({
                             "revised_confidence": sys2.revised_confidence,
                         }),
                     },
                     created_at_ms: now_ms,
-                };
+                });
 
-                state.task_store.lock().await.insert(task);
+                Ok(Json(BeliefSetResponse {
+                    belief_id: format!("{id:?}"),
+                    task_id: Some(task_id),
+                    system2_triggered: true,
+                }))
+            }
+
+            // Async path: budget consumed here, LLM called in spawned task.
+            epica_runtime::RuntimeUpdateResult::System2Pending { signal } => {
+                // Try to consume budget synchronously before spawning.
+                let has_budget = state.runtime.try_consume_system2_budget().await;
+                if !has_budget {
+                    metrics::counter!(names::BELIEF_UPDATES, "system2" => "throttled").increment(1);
+                    metrics::counter!(names::SYSTEM2_THROTTLED).increment(1);
+                    return Ok(Json(BeliefSetResponse {
+                        belief_id: format!("{id:?}"),
+                        task_id: None,
+                        system2_triggered: false,
+                    }));
+                }
+
+                let task_id = Uuid::new_v4();
+                state.task_store.lock().await.insert(McpTask {
+                    task_id,
+                    belief_key: req.key.clone(),
+                    status: TaskStatus::Pending,
+                    created_at_ms: now_ms(),
+                });
+
+                metrics::counter!(names::BELIEF_UPDATES, "system2" => "true").increment(1);
+
+                let state_clone = Arc::clone(&state);
+                tokio::spawn(async move {
+                    state_clone.task_store.lock().await
+                        .update_status(task_id, TaskStatus::Running);
+
+                    if let Some(client) = state_clone.runtime.llm_client_arc() {
+                        match client.reflect(&signal).await {
+                            Ok(result) => {
+                                state_clone.runtime
+                                    .apply_system2_result(id, result.revised_confidence)
+                                    .await;
+                                metrics::counter!(names::SYSTEM2_ACTIVATIONS).increment(1);
+                                state_clone.task_store.lock().await.update_status(
+                                    task_id,
+                                    TaskStatus::Completed {
+                                        result: serde_json::json!({
+                                            "revised_confidence": result.revised_confidence,
+                                            "reasoning": result.reasoning,
+                                        }),
+                                    },
+                                );
+                            }
+                            Err(e) => {
+                                // Refund the budget token — transient errors must not drain
+                                // the session budget.
+                                state_clone.runtime.release_system2_budget().await;
+                                state_clone.task_store.lock().await.update_status(
+                                    task_id,
+                                    TaskStatus::Failed { error: e.to_string() },
+                                );
+                            }
+                        }
+                    }
+                });
 
                 Ok(Json(BeliefSetResponse {
                     belief_id: format!("{id:?}"),
@@ -174,6 +234,13 @@ pub async fn handle_belief_set_result(
         "status": task.status,
         "created_at_ms": task.created_at_ms,
     })))
+}
+
+fn now_ms() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_millis() as u64
 }
 
 fn parse_provenance(kind: Option<&str>) -> Provenance {
