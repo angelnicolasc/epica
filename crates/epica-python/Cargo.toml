@@ -18,8 +18,8 @@ crate-type = ["cdylib", "rlib"]
 epica-core.path      = "../epica-core"
 epica-runtime.path   = "../epica-runtime"
 epica-contracts.path = "../epica-contracts"
-pyo3.workspace       = true
-tokio.workspace      = true
+pyo3           = { workspace = true, features = ["extension-module"] }
+tokio          = { workspace = true, features = ["rt-multi-thread", "sync", "macros"] }
 serde.workspace      = true
 serde_json.workspace = true
 uuid.workspace       = true

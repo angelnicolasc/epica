@@ -28,8 +28,8 @@ edition      = "2021"
 rust-version = "1.82"
 license      = "MIT OR Apache-2.0"
 authors      = ["Epica Contributors"]
-repository   = "https://github.com/your-org/epica"
-homepage     = "https://github.com/your-org/epica"
+repository   = "https://github.com/angelnicolasc/epica"
+homepage     = "https://github.com/angelnicolasc/epica"
 keywords     = ["belief-revision", "agm", "causal-reasoning", "llm-agents", "runtime"]
 categories   = ["science", "data-structures", "asynchronous"]
 
@@ -43,7 +43,7 @@ indexmap       = { version = "2.3", features = ["serde"] }
 petgraph       = { version = "0.6", features = ["serde-1"] }
 
 # Async
-tokio          = { version = "1.40", features = ["full"] }
+tokio          = { version = "1.40" }
 async-trait    = "0.1"
 
 # Error handling
@@ -80,7 +80,7 @@ governor       = "0.6"
 
 # Auth
 jsonwebtoken   = "9"
-rsa            = { version = "0.9", features = ["pkcs8", "pkcs1", "pem"] }
+rsa            = { version = "0.9", features = ["pem"] }
 
 # Async utilities
 futures-util   = "0.3"
@@ -96,7 +96,7 @@ reqwest        = { version = "0.12", features = ["json"] }
 redis          = { version = "0.26", features = ["tokio-comp", "aio"] }
 
 # PyO3 (epica-python)
-pyo3           = { version = "0.22", features = ["extension-module"] }
+pyo3           = { version = "0.22" }
 
 [profile.release]
 lto            = "thin"

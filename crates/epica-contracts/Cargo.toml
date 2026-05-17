@@ -18,8 +18,9 @@ thiserror.workspace   = true
 tracing.workspace     = true
 uuid.workspace        = true
 async-trait.workspace = true
-tokio.workspace       = true
+tokio          = { workspace = true, features = ["sync", "macros"] }
 
 [dev-dependencies]
 proptest.workspace = true
 tokio = { workspace = true, features = ["test-util"] }
+toml.workspace = true
