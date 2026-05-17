@@ -209,6 +209,7 @@ fn validate_jwt(token: &str, config: &AuthConfig) -> Result<JwtClaims, String> {
 /// Parse a public key PEM (PKCS#8 SPKI or PKCS#1) and return a JWK object.
 fn extract_rsa_jwk(pem: &str, kid: &str) -> Result<serde_json::Value, String> {
     use rsa::pkcs8::DecodePublicKey;
+    use rsa::traits::PublicKeyParts;
 
     let public_key = rsa::RsaPublicKey::from_public_key_pem(pem)
         .or_else(|_| {
@@ -296,21 +297,26 @@ mod tests {
         assert!(validate_jwt(&token, &cfg).is_err());
     }
 
-    // ── RS256 tests — generate a 1024-bit key pair at test time ──────────────
+    // ── RS256 tests — hardcoded 2048-bit test key pairs ──────────────────────
+    // Pre-generated offline; parsing is instant vs. runtime generation (minutes in
+    // debug mode due to primality search). These are TEST-ONLY keys — not secrets.
 
-    fn rs256_keypair() -> (rsa::RsaPrivateKey, rsa::RsaPublicKey) {
-        use rand::rngs::OsRng;
-        let private_key = rsa::RsaPrivateKey::new(&mut OsRng, 1024).unwrap();
-        let public_key = rsa::RsaPublicKey::from(&private_key);
-        (private_key, public_key)
-    }
+    /// Test keypair 1: private key (PKCS#8 PEM).
+    const TEST_KEY1_PRIV: &str = "-----BEGIN PRIVATE KEY-----\nMIIEvgIBADANBgkqhkiG9w0BAQEFAASCBKgwggSkAgEAAoIBAQCtbktWScvzqg6X\nzhsYaP5riMXu54FHT8r4ly3SrsgGtRxYHF0ICYj+wUBcWHWjLCzkMCueQtaczCYP\n51eTixk2JnePQta/1Rxx0eOzMXNpFrziE3IQTXwUkHiWgJHjxPg4o05T2QVnbWLv\nTI8dAglcEPSBiVa3/GlUnmtWRlkxLBJbOaU4MR++CqqqmEGkEnirZ8LwrDse2yMV\nRm+6TeKuNGKSwWED/x9gUl/81p0P6VPYxiPXuRijLT24V+73f/bFR1l+hUHBVhFI\nqAQhJEfxfKC/RfBOf2jTQNaKAXLcCswIL+ZZcjzqUYvVy4QQAoVE3mCoMxJdAcM/\nmAJdqXi5AgMBAAECggEAcLFfgMVZIo7ZBqllj9oBoCxyuUdzCLx/nkLWArWRwlID\nBfoANY3EmA1I3fiZEBtPXEM0xJSX0bER9nmTvYrAKiCaxdtfoa0/23HQLIswfBPL\nTnfmQVOoEdDCmsEWi1NdG6h56B/30/oPNIGh6O5+2HUn+9gbIliAtPxvsNLrd/gh\nW+wQzMMpy7GghqFU9hq7pqI055OVzRBS+6krvrpYdF7Tfw0BVdz0YUMta7wuTXkI\nuTBMeqfOQnw1hxXXqmPDOnpL/NL0dXm4hXqEc2tLtqBVB+baMGxNW31j9hR3kk2I\nE7BXsqandV7Dc9tVxxZEayPIUBnhSALkglAqqlzL0QKBgQDmFy4CdhKPV1FooI2L\nL/WsHaQTUC7fAhXpgBxXwM+ZKvCbAuzvUQbvpUc7VBVXgZL7OugXdLMIlJjJrSvF\nhrojMj1AffDe5c20vjnRdHrWRc+nca/fqG6ZzfAsgeH3ub/Wzyp20zJ1D72MpjAN\nQUNhWz0y1z5reF0LaKc+zmzczQKBgQDA9cj85VXDriZcBoIIEz6zC3QuPhiuzwwB\nDntRlV14IK+3iTCtJc43+iSZCuCOK8tuW+QV/95BShjVJU7ti+Zt3T+Svx7lRMHK\nF95zg9PGuMxsDijUU9yCiBdGkAEmJpKHUzeD4qr9Peq7Xc6WkFjQvbC3S0hcH2ek\n493/AQ5LnQKBgGpfKPwmTepKue4e25EPeQo7IdFz7ldXBX5PpcrD7rWm7lkbfyIc\nWZKM3GOHOd6cnrDayNWfM+2xlPkXv/avlHoVDdA06RiDMRhwIRa+PNO2rouAuYgy\nu/8LAA/zc94s142ddMo+VUNdJYpSgkB+fYISxjYs4ESa/pj5pugYUqe5AoGBAJQj\nnjxZrPBf4N9Bt86PR9GZd4aQ8c4y8ppVDePicjHplj2nu5EStzFOf45nRWKgyLtf\nHMqu92jUhCAPVnsUrsGl3ErDI+sMUGLg1E2G5a1o7rf+XuYzw9UKuiPYJqmtb00p\nXDOKb4+gW3ehWxtIkocfOm5eA52GFsIGlsZRfzIZAoGBALAHORgZxq3HX+02f3M9\n9vaXhdlaJhqgqeRRToeXPqXvFHXY/i7wKOuJAarQXB3tIeiugljW0elPvzif5lLW\nPKjmcCPs9DM4GKU8BGdkw/IsM6+NdIWDWU0DYpEPtjQgfcxX4gH4sn7eVgOnD9il\nvdyBC67ej7xWRcCa4olJa3xK\n-----END PRIVATE KEY-----";
 
-    fn rs256_cfg(public_key: &rsa::RsaPublicKey) -> AuthConfig {
-        use rsa::pkcs8::EncodePublicKey;
-        let pem = public_key.to_public_key_pem(Default::default()).unwrap();
+    /// Test keypair 1: public key (SPKI PEM).
+    const TEST_KEY1_PUB: &str = "-----BEGIN PUBLIC KEY-----\nMIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEArW5LVknL86oOl84bGGj+\na4jF7ueBR0/K+Jct0q7IBrUcWBxdCAmI/sFAXFh1oyws5DArnkLWnMwmD+dXk4sZ\nNiZ3j0LWv9UccdHjszFzaRa84hNyEE18FJB4loCR48T4OKNOU9kFZ21i70yPHQIJ\nXBD0gYlWt/xpVJ5rVkZZMSwSWzmlODEfvgqqqphBpBJ4q2fC8Kw7HtsjFUZvuk3i\nrjRiksFhA/8fYFJf/NadD+lT2MYj17kYoy09uFfu93/2xUdZfoVBwVYRSKgEISRH\n8Xygv0XwTn9o00DWigFy3ArMCC/mWXI86lGL1cuEEAKFRN5gqDMSXQHDP5gCXal4\nuQIDAQAB\n-----END PUBLIC KEY-----";
+
+    /// Test keypair 2: private key (PKCS#8 PEM) — used as the "wrong key" in mismatch tests.
+    const TEST_KEY2_PRIV: &str = "-----BEGIN PRIVATE KEY-----\nMIIEvgIBADANBgkqhkiG9w0BAQEFAASCBKgwggSkAgEAAoIBAQDgq1TKyHYw5XuB\nnVPOGgs9VsxgGYIJrsW3etbxaeP5SCCRN2az3WS2upXG420dz/Nh4dxSSud2Kvez\nVia2OR74ti5gd0bBix9/KdzcC6pdvq4J4g6IaOEt7Ql3qr9cfr3HbFZoBKo5TglO\nn8cNMZM/xeLfxYieYTnRQR0X5YSV88t/m3558XLJNXvYfuivPke334VcOvty6H6m\nDkQJ7s11s1mr7g3+4xwDXKytreer3Odlxow+u5fwWvqGWTMs5BQEsEceKXX+OE33\nQEJLCv0cSmpo3BRHN89qJx+CJPg5xKBgByuG3sUia/aDeZTPcD2SpcZbbukkADCE\nwghhrVhlAgMBAAECggEBAIeUPRYmhNSbF74vMAy3QMMiZzEzE3s+YgiIc7+51B5x\n/V1E3pB6cTWoQYyFYCrWfBw8jZWHqEhyQ4qQ2cmrjNowLqp+ME/J4hb+L08HJydt\nU1+ZcIW3LPRnEAiMHPD3dxUqdrZM4mC0i/9LgnaezSp2A6Rgc0KIj7iMn770/d7y\n3/2zxnk0Q4PkTzkQV+38rKjV3X2rMy6rIO3AUGtm/+FW4sY53BYXnio3kstCuWvG\nfEJHmQKfWO+cYedo8pvifgfIuea1WfmhcPzIenOS6JMwLeDhNzVViktfnrsx12JX\n3y8eWUXXvqjZiGLo90aAkpByPNpkdNqDtNsnurm9/X0CgYEA9PgYLd7W4bUXX3t1\nKxsd7uVXe2jo+pSiJv0esIV5cp7yMnN93dBaXdARcGqvXBWDKsYA910yokj5OLR5\nFw9HuweWVwo7yWxdNUu4u9jz/D121Z2v1G87/RWsUyE/pRyClGm8+Jpq9VUn8X45\ntAz23J+5+Hxbo+OXaupgLRYY9PMCgYEA6sk6aj0wYEIim9iuacvyCPmPYjMdEyRw\nnRVbUwxgGipFO9LAAtHFkWOT2xCAbyecgWKIJq1SVJmNsuhMfkrgKmT0lzoUGzMa\nBCfcA/grPKrOAe8pendHaLX9P2k8W00pssv6nhbPvN730xkWQWedJeIAhAr+EeUn\n76O2Zql3M0cCgYEArfblzOV8eitNXuxgx+zo8/eAic517UXSZZfJzJftKF4CJ5vm\n3bgSBJ83UzsgL2fDj4OvuftAcwkZm5Bmkd6zFPoNZOCKlr9S7f9JQHWQxyerFYZ3\nEIix9EgI6bwp44p8nQL+RRn8LR99Tz1RozC1uvXfbrx5o8iDhlTNWhdgP8sCgYBs\nBPjjOBOxtbvGiAJ2mmZYyri1LV8LF5DYNKM3qlHst9XymBvPMEP9iBrWhtkQSuEu\nhe6uHL/sPFl9HnNTB4/q8Ve22/m0KeamUtBe4ybBWrQ9H5OtzIMGIfTJ39jtCKtO\nn5pGcahR9SN/8+LRZKJgc4JZPdV21j9xeZjJ0t4MsQKBgBGfdxnZo5APThNciYJy\njmH6YX5e4BGNTd2oVzxVNk3wcXohLabSjhrm432Bj730lOH/10nJmhMHCJD1SpHn\n0NIeW2Okgv/5+y/NrtL1JVJdZaD1J9DQ1dremoryz5xIuS/2YgZN2FftIUfk5RcD\nYRHfEfH34oS5k+vMMO7ftMKb\n-----END PRIVATE KEY-----";
+
+    /// Test keypair 2: public key (SPKI PEM) — used as the "wrong" verifying key.
+    const TEST_KEY2_PUB: &str = "-----BEGIN PUBLIC KEY-----\nMIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA4KtUysh2MOV7gZ1TzhoL\nPVbMYBmCCa7Ft3rW8Wnj+UggkTdms91ktrqVxuNtHc/zYeHcUkrndir3s1Ymtjke\n+LYuYHdGwYsffync3AuqXb6uCeIOiGjhLe0Jd6q/XH69x2xWaASqOU4JTp/HDTGT\nP8Xi38WInmE50UEdF+WElfPLf5t+efFyyTV72H7orz5Ht9+FXDr7cuh+pg5ECe7N\ndbNZq+4N/uMcA1ysra3nq9znZcaMPruX8Fr6hlkzLOQUBLBHHil1/jhN90BCSwr9\nHEpqaNwURzfPaicfgiT4OcSgYAcrht7FImv2g3mUz3A9kqXGW27pJAAwhMIIYa1Y\nZQIDAQAB\n-----END PUBLIC KEY-----";
+
+    fn rs256_cfg_from_pub_pem(pub_pem: &str) -> AuthConfig {
         AuthConfig {
             algorithm: JwtAlgorithm::Rs256 {
-                public_key_pem: pem.to_string(),
+                public_key_pem: pub_pem.to_string(),
                 kid: "test-rs256".into(),
             },
             audience: "epica".into(),
@@ -319,34 +325,29 @@ mod tests {
         }
     }
 
-    fn rs256_token(private_key: &rsa::RsaPrivateKey, claims: &JwtClaims) -> String {
-        use rsa::pkcs8::EncodePrivateKey;
-        let pem = private_key.to_pkcs8_pem(Default::default()).unwrap();
-        let key = EncodingKey::from_rsa_pem(pem.as_bytes()).unwrap();
+    fn rs256_token_from_priv_pem(priv_pem: &str, claims: &JwtClaims) -> String {
+        let key = EncodingKey::from_rsa_pem(priv_pem.as_bytes()).unwrap();
         encode(&Header::new(Algorithm::RS256), claims, &key).unwrap()
     }
 
     #[test]
     fn rs256_valid_token_passes() {
-        let (private_key, public_key) = rs256_keypair();
-        let cfg = rs256_cfg(&public_key);
-        let token = rs256_token(&private_key, &test_claims(now_plus(3600)));
+        let cfg = rs256_cfg_from_pub_pem(TEST_KEY1_PUB);
+        let token = rs256_token_from_priv_pem(TEST_KEY1_PRIV, &test_claims(now_plus(3600)));
         assert!(validate_jwt(&token, &cfg).is_ok());
     }
 
     #[test]
     fn rs256_wrong_key_fails() {
-        let (signing_key, _) = rs256_keypair();
-        let (_, wrong_public) = rs256_keypair();
-        let cfg = rs256_cfg(&wrong_public);
-        let token = rs256_token(&signing_key, &test_claims(now_plus(3600)));
+        // Sign with key 1, verify with key 2's public key → must fail.
+        let cfg = rs256_cfg_from_pub_pem(TEST_KEY2_PUB);
+        let token = rs256_token_from_priv_pem(TEST_KEY1_PRIV, &test_claims(now_plus(3600)));
         assert!(validate_jwt(&token, &cfg).is_err());
     }
 
     #[test]
     fn jwks_response_rs256_has_n_and_e() {
-        let (_, public_key) = rs256_keypair();
-        let cfg = rs256_cfg(&public_key);
+        let cfg = rs256_cfg_from_pub_pem(TEST_KEY1_PUB);
         let jwks = cfg.jwks_response();
         let keys = jwks["keys"].as_array().unwrap();
         assert_eq!(keys.len(), 1);

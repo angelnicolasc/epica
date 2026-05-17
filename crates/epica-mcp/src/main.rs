@@ -40,7 +40,27 @@ fn main() {
     // ── Auth ───────────────────────────────────────────────────────────────────
     let no_auth = env_flag("EPICA_NO_AUTH");
     let auth = if no_auth {
-        tracing::warn!("⚠️  Auth disabled via --no-auth / EPICA_NO_AUTH=1 — development mode only");
+        // EPICA_NO_AUTH=1 is only permitted when EPICA_ENV is explicitly dev/test.
+        // A missing EPICA_ENV is treated as production: a misconfigured deploy that
+        // forgets to set env vars must fail loud, not silently expose an open server.
+        let env_name = env_or("EPICA_ENV", "");
+        let in_dev = matches!(
+            env_name.to_lowercase().as_str(),
+            "development" | "dev" | "test"
+        );
+        if !in_dev {
+            eprintln!(
+                "FATAL: EPICA_NO_AUTH=1 is only permitted when \
+                 EPICA_ENV=development|dev|test.\n\
+                 Current EPICA_ENV={env_name:?}. \
+                 Set EPICA_ENV=development or remove EPICA_NO_AUTH."
+            );
+            std::process::exit(1);
+        }
+        tracing::warn!(
+            env = %env_name,
+            "⚠️  Auth disabled — development mode only (EPICA_ENV={env_name})"
+        );
         AuthConfig::disabled()
     } else {
         AuthConfig::from_env()
@@ -53,6 +73,8 @@ fn main() {
     let reliability_baseline: f32 = env_f32("EPICA_RELIABILITY", 0.5);
     let system2_budget: u32 = env_u32("EPICA_SYSTEM2_BUDGET", 50);
     let system2_refill_rate: f32 = env_f32("EPICA_SYSTEM2_REFILL", 1.0);
+    // τ (tau): System 2 activation threshold. See DEVLOG HD-E4 for calibration plan.
+    let reflection_threshold: f32 = env_f32("EPICA_REFLECTION_THRESHOLD", 0.15);
 
     // ── Optional OTLP endpoint (OpenTelemetry trace export) ────────────────────
     // If set, configure tracing-opentelemetry + opentelemetry-otlp in your process
@@ -75,12 +97,15 @@ fn main() {
         });
 
     // ── Runtime ────────────────────────────────────────────────────────────────
-    let runtime = Arc::new(BeliefRuntime::new(
-        BeliefQuad::new(),
-        reliability_baseline,
-        system2_budget,
-        system2_refill_rate,
-    ));
+    let runtime = Arc::new(
+        BeliefRuntime::new(
+            BeliefQuad::new(),
+            reliability_baseline,
+            system2_budget,
+            system2_refill_rate,
+        )
+        .with_default_tau(reflection_threshold),
+    );
 
     tracing::info!(
         addr = %addr,
