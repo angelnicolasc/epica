@@ -1,6 +1,8 @@
 use std::collections::HashSet;
 use std::time::{SystemTime, UNIX_EPOCH};
 
+use ordered_float::NotNan;
+
 use uuid::Uuid;
 
 use crate::{
@@ -46,8 +48,15 @@ impl BeliefQuad {
 
         let contradicts = self.check_contradiction(belief_id, &new_value);
 
-        // Run postulate audit against the pre-revision state
+        // Run postulate audit against the pre-revision state.
+        // K*4 (vacuity) is informational — false means contraction is needed, which is legitimate.
+        // K*2, K*3, K*5, K*6 must hold in every build; violations are a runtime logic error.
         let audit = PostulateAudit::verify(self, belief_id, &new_value, contradicts);
+        if !audit.all_critical_pass() {
+            return Err(BeliefRevisionError::PostulateViolation {
+                postulate: audit.failed_postulate_name(),
+            });
+        }
 
         if !contradicts {
             return self.expand_only(belief_id, new_value, new_provenance, new_confidence, audit);
@@ -136,20 +145,27 @@ impl BeliefQuad {
 
     /// Compute the minimal set of beliefs to contract before accepting `new_value` for `belief_id`.
     ///
-    /// Returns the direct `InferredFrom` premises of `belief_id` — the beliefs that
-    /// immediately justify its current (now-contradicted) value.  Transitive ancestors
-    /// that did not directly establish `belief_id` are preserved; they remain valid unless
-    /// a downstream re-propagation re-establishes the contradiction, at which point a
-    /// subsequent `revise()` call handles them.
+    /// `inferred_from_premises(belief_id)` returns `Vec<Vec<BeliefId>>` — each inner `Vec` is
+    /// the premise list of one independent `InferredFrom` causal edge (one support path). To
+    /// break all support for `belief_id`, we must remove at least one premise from each path
+    /// (a minimal hitting set). For each path we remove the weakest premise (lowest
+    /// `fast_confidence`) — the belief we least trust, and therefore lose the least by contracting.
     ///
-    /// Satisfies Hansson's Core-Retainment: every removed belief was part of a minimal
-    /// support set for the contracted sentence.  Strictly more minimal than returning all
-    /// causal ancestors (TD-002 resolved).
+    /// Previous implementation: `.flatten().collect()` — collected ALL premises from ALL paths,
+    /// violating Hansson's Core-Retainment for beliefs with multiple independent support paths
+    /// (removed more than necessary). This implementation removes exactly one premise per path.
+    ///
+    /// `NotNan` is used for NaN-safe `f32` comparison.
     fn minimal_contraction_set(&self, belief_id: BeliefId) -> HashSet<BeliefId> {
         self.causal
             .inferred_from_premises(belief_id)
             .into_iter()
-            .flatten()
+            .filter_map(|premises| {
+                premises.into_iter().min_by_key(|&id| {
+                    let conf = self.nodes.get(id).map(|n| n.fast_confidence).unwrap_or(0.0);
+                    NotNan::new(conf).unwrap_or(NotNan::new(0.0).unwrap())
+                })
+            })
             .collect()
     }
 

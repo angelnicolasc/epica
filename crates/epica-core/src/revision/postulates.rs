@@ -61,29 +61,24 @@ impl PostulateAudit {
         // K*6: extensionality — Phase 1 approximation: always true
         let extensionality = true;
 
-        let audit = Self { success, inclusion, vacuity, consistency, extensionality };
-
-        // In debug builds, assert all postulates. Silent in release.
-        #[cfg(debug_assertions)]
-        audit.assert_all();
-
-        audit
-    }
-
-    /// Assert all postulates. Panics in debug builds on any violation.
-    #[cfg(debug_assertions)]
-    fn assert_all(&self) {
-        assert!(self.success,       "AGM K*2 (success) violated");
-        assert!(self.inclusion,     "AGM K*3 (inclusion) violated");
-        // K*4 vacuity is informational — a failed vacuity check means contraction
-        // was needed, which is legitimate. We don't panic on it.
-        assert!(self.consistency,   "AGM K*5 (consistency) violated: φ is self-contradictory");
-        assert!(self.extensionality, "AGM K*6 (extensionality) violated");
+        Self { success, inclusion, vacuity, consistency, extensionality }
     }
 
     /// Returns `true` if all postulates that must hold after a valid revision pass.
+    ///
+    /// K*4 (vacuity) is intentionally excluded: `vacuity = false` means contraction
+    /// was needed, which is a legitimate outcome, not a violation.
     pub fn all_critical_pass(&self) -> bool {
         self.success && self.inclusion && self.consistency && self.extensionality
+    }
+
+    /// Name of the first critical postulate that failed, for error reporting.
+    pub fn failed_postulate_name(&self) -> &'static str {
+        if !self.success      { "K*2 (success)" }
+        else if !self.inclusion    { "K*3 (inclusion)" }
+        else if !self.consistency  { "K*5 (consistency)" }
+        else if !self.extensionality { "K*6 (extensionality)" }
+        else { "none" }
     }
 }
 
