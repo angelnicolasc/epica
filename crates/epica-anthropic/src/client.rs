@@ -68,6 +68,13 @@ impl AnthropicLlmClient {
     }
 }
 
+/// Maximum number of retry attempts for transient LLM errors.
+const MAX_RETRIES: u32 = 3;
+/// Base delay (ms) for exponential backoff. Doubles on each retry.
+const BASE_DELAY_MS: u64 = 500;
+/// Maximum jitter (ms) added to each backoff to avoid thundering herd.
+const JITTER_MS: u64 = 150;
+
 #[async_trait::async_trait]
 impl LlmClient for AnthropicLlmClient {
     #[instrument(skip(self), fields(key = %diagnostic.belief_key, fast = diagnostic.fast_confidence))]
@@ -75,6 +82,39 @@ impl LlmClient for AnthropicLlmClient {
         &self,
         diagnostic: &DiagnosticSignal,
     ) -> Result<System2Result, LlmClientError> {
+        let mut last_err = LlmClientError::Network("no attempts made".into());
+
+        for attempt in 0..MAX_RETRIES {
+            if attempt > 0 {
+                let delay = BASE_DELAY_MS * (1u64 << (attempt - 1));
+                // Simple deterministic jitter: attempt index × 50ms to avoid synchronisation.
+                let jitter = (attempt as u64) * (JITTER_MS / MAX_RETRIES as u64);
+                let total = std::time::Duration::from_millis(delay + jitter);
+                warn!(attempt, delay_ms = total.as_millis(), "System 2: retrying after transient error");
+                tokio::time::sleep(total).await;
+            }
+
+            match self.try_reflect(diagnostic).await {
+                Ok(result) => return Ok(result),
+                Err(e) if is_retryable(&e) => {
+                    warn!(attempt, error = %e, "System 2: transient error, will retry");
+                    last_err = e;
+                }
+                Err(e) => return Err(e),
+            }
+        }
+
+        Err(last_err)
+    }
+}
+
+/// Returns `true` for errors that are worth retrying (rate limits, transient server errors).
+fn is_retryable(e: &LlmClientError) -> bool {
+    matches!(e, LlmClientError::RateLimited | LlmClientError::Network(_))
+}
+
+impl AnthropicLlmClient {
+    async fn try_reflect(&self, diagnostic: &DiagnosticSignal) -> Result<System2Result, LlmClientError> {
         let url = format!("{}/v1/messages", self.config.base_url);
         let body = json!({
             "model": self.config.model,
@@ -114,7 +154,6 @@ impl LlmClient for AnthropicLlmClient {
             .await
             .map_err(|e| LlmClientError::Deserialize(e.to_string()))?;
 
-        // Find the `report_confidence` tool_use block
         let tool_input = msg
             .content
             .iter()
