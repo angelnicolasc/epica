@@ -12,6 +12,7 @@
 //! ```
 
 use pyo3::prelude::*;
+use pyo3::PyTypeInfo;
 
 pyo3::create_exception!(epica._epica, EpicaError,             pyo3::exceptions::PyException);
 pyo3::create_exception!(epica._epica, BeliefRevisionError,    EpicaError);

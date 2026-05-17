@@ -158,6 +158,14 @@ impl PyBeliefRuntime {
                     dict.set_item("status", "system2_activated")?;
                     dict.set_item("task_id", py.None())?; // task_id managed by MCP layer
                 }
+                RuntimeUpdateResult::System2Pending { .. } => {
+                    // S-2: update_belief() now returns Pending; consumption of the
+                    // budget, the LLM call, and apply_system2_result() are the
+                    // caller's responsibility. The Python binding does not drive
+                    // System 2 directly — surface the status to user code.
+                    dict.set_item("status", "system2_pending")?;
+                    dict.set_item("task_id", py.None())?;
+                }
                 RuntimeUpdateResult::System2Throttled => {
                     dict.set_item("status", "system2_throttled")?;
                     dict.set_item("task_id", py.None())?;
