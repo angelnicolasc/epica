@@ -1,6 +1,14 @@
-/// Default divergence threshold τ for System 2 activation.
+/// Default divergence threshold τ for System 2 activation (`|fast − baseline| > τ`).
 ///
-/// Paper AUQ (arXiv:2601.15703) reports τ ≈ 0.15 as optimal on ALFWorld and WebShop.
+/// **Origin**: borrowed from AUQ (arXiv:2601.15703) §3.3, which reports τ ≈ 0.15 as
+/// optimal on ALFWorld and WebShop benchmarks — measured over Transformer attention
+/// weights, not over a belief graph.
+///
+/// **Limitation**: this runtime propagates confidence over a Noisy-OR belief graph,
+/// not over attention weights. The two quantities are not directly comparable; τ = 0.15
+/// has not been independently validated on Epica's runtime. See DEVLOG HD-E4 for the
+/// planned calibration sweep. Override per-belief with `.with_reflection_threshold(τ)`,
+/// or globally via `BeliefRuntime::with_default_tau(τ)`.
 pub const DEFAULT_REFLECTION_THRESHOLD: f32 = 0.15;
 
 /// Returns the effective confidence to use for downstream decisions.

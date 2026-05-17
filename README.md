@@ -10,8 +10,8 @@ Epica gives LLM agents a disciplined belief layer: a typed, revision-safe, contr
 
 Three concrete capabilities this codebase delivers today:
 
-- **Contradiction-aware belief updates**: when new evidence contradicts existing beliefs, AGM contraction (Alchourron-Gardenfors-Makinson, 1985) applies a Core-Retainment-style contraction over the contradicted belief's supporting premises before accepting the new one. Verified against postulates K\*2-K\*5 in integration tests; K\*6 is approximated (structural equality only, see [agm_postulates.md](docs/agm_postulates.md)).
-- **Confidence propagation over causal structure**: System 1 propagates confidence changes through the causal graph via Noisy-OR. System 2 triggers LLM reflection when confidence diverges from the reliability baseline. Measured T-ECE = 0.07 on the BeliefShift benchmark (target: < 0.08).
+- **Contradiction-aware belief updates**: when new evidence contradicts an existing belief on the same key, AGM contraction (Alchourron-Gardenfors-Makinson, 1985) applies a Core-Retainment-style minimal contraction over the belief's supporting premises before accepting the new value. Postulates K\*2–K\*5 are enforced as hard errors in all builds; K\*6 is approximated. Cross-belief semantic contradiction (paraphrases, negations) requires explicit graph edges or Phase 4 embedding integration (TD-003).
+- **Confidence propagation over causal structure**: System 1 propagates confidence changes through the causal graph via Noisy-OR. System 2 triggers async LLM reflection when confidence diverges from the reliability baseline. T-ECE pipeline validated; real-task calibration benchmarks (ALFWorld/WebShop) not yet measured.
 - **Contract-enforced belief mutation**: typed `C = (P, I, G, R)` contracts gate every belief write. Soft violations log and continue. Hard violations trigger recovery. Critical violations halt with a causal diff and escalate.
 
 ---
@@ -39,7 +39,7 @@ Seven Rust crates compile with `cargo check --workspace --exclude crates/epica-p
 | AGM K\*6 extensionality | **Approximated** - structural equality only | `tests/agm_postulates/k6_extensionality.rs` |
 | System 1 Noisy-OR propagation | Implemented | `tests/integration/system1_propagation.rs` |
 | System 2 LLM reflection (sync) | Implemented | `tests/system2_mock.rs`, `crates/epica-anthropic/` |
-| T-ECE calibration metric | Implemented; result: **0.07 < 0.08 target (verified)** | `tests/beliefshift_benchmark.rs` |
+| T-ECE calibration metric | Implemented; formula pipeline validated | `tests/beliefshift_benchmark.rs` |
 | Checkpoint / rollback with K\*4 guard | Implemented | `tests/integration/quad_basic.rs` |
 | Behavioral contracts C=(P,I,G,R) | Implemented | `cargo test -p epica-contracts` |
 | Mnemonic sovereignty (9 primitives) | Implemented at struct level; enforced in runtime | `crates/epica-contracts/src/sovereignty.rs` |
@@ -60,8 +60,8 @@ Seven Rust crates compile with `cargo check --workspace --exclude crates/epica-p
 | Item | Status | Details |
 |------|--------|---------|
 | AGM K\*6 | **Approximate** | Structural equality only; semantic equivalence requires embedding comparison (TD-003) |
-| Semantic contradiction detection | **Approximate** | Literal JSON comparison; paraphrases not detected (TD-003) |
-| System 2 async | **Pending** | LLM reflection calls are synchronous today; true async requires task-store persistence (TD-P5-002) |
+| Semantic contradiction detection | **Structural only** | Same-ID value comparison (normalized for `Asserted`). Cross-belief semantic contradiction requires explicit `SemanticEdge::Contradicts` or Phase 4 embeddings (TD-003) |
+| System 2 async | **Implemented** | LLM reflection spawns a background task; `update_belief()` returns immediately with a `task_id`. Budget refunded on LLM failure. |
 | Python System 2 injection | **Not exposed** | `BeliefRuntime::with_llm_client()` not yet bridged to Python (TD-P7-002) |
 | Python async (`await`) | **Not available** | `pyo3-asyncio` with pyo3 0.22 is unstable (TD-P6-001) |
 | Neo4j persistence | **Returns `Err`** | No stable Rust driver; graceful error present (TD-NEW-001) |
@@ -138,7 +138,7 @@ See [`docs/audit_guide.md`](docs/audit_guide.md) for a structured review that ma
 - **K\*6 is structural**: Epica does not detect semantic equivalence between paraphrased beliefs. Two beliefs with identical meaning but different strings are treated as distinct.
 - **System 2 is synchronous**: Under load, LLM reflection blocks the update path. True async requires task-store persistence (TD-P5-002).
 - **ProspectiveIndex uses hash embeddings by default**: Without a configured `ProspectiveClient` (e.g., via `epica-anthropic`), write-time indexing uses `HashEmbedder` - a fast offline fallback, not semantic similarity.
-- **PostulateAudit does not block in release builds**: AGM postulate violations are recorded in the audit trail but do not halt the mutation. Debug builds assert; release builds are silent.
+- **Causal contradiction is cross-belief only with explicit edges**: `check_contradiction()` detects structural changes on a single belief (same ID, different value). Cross-belief semantic contradiction — paraphrases, negations, synonyms across distinct beliefs — requires explicit `SemanticEdge::Contradicts` edges or Phase 4 embedding integration (TD-003).
 - **Causal contradiction is not semantic**: `check_contradiction()` compares JSON values literally. Negations, synonyms, and paraphrases are not caught (TD-003).
 - **Python SDK does not expose System 2 LLM injection**: `BeliefRuntime::with_llm_client()` is not bridged to Python; System 2 always returns `System1Only` or `System2Throttled` from Python (TD-P7-002).
 
@@ -204,7 +204,7 @@ For a full walkthrough from belief insertion through contradiction, rollback, an
 
 | Benchmark | Target | Current result | How measured | Gap |
 |-----------|--------|----------------|--------------|-----|
-| BeliefShift T-ECE | < 0.08 | **0.07 (verified)** | `tests/beliefshift_benchmark.rs` - deterministic 25-step session | None |
+| BeliefShift T-ECE (formula validation) | < 0.08 | **0.07 (pipeline only)** | `tests/beliefshift_benchmark.rs` — `pipeline_tece_formula_validation` confirms formula computes correctly; `beliefshift_tece_variable_confidence` uses varied confidences | Real-task calibration (ALFWorld/WebShop) not yet measured |
 | System 1 propagation at 10K nodes | < 2x HashMap | Not yet measured | `cargo bench -p epica-core` | Pending |
 | Checkpoint + rollback at 10K nodes | < 10ms | Not yet measured | `cargo bench -p epica-core` | Pending |
 
