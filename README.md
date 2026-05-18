@@ -173,13 +173,23 @@ See [`docs/audit_guide.md`](docs/audit_guide.md) for a structured review that ma
 ## Current limitations
 
 - **K\*6 is structural**: Epica does not detect semantic equivalence between paraphrased beliefs. Two beliefs with identical meaning but different strings are treated as distinct.
-- **System 2 is synchronous**: Under load, LLM reflection blocks the update path. True async requires task-store persistence (TD-P5-002).
+- **System 2 is async, with optional persistent task store**: `update_belief()` returns `System2Pending` and the LLM reflection runs in a spawned task. Build with `--features sled-store` and set `EPICA_TASKSTORE=sled:/path` for tasks that survive a process restart.
 - **ProspectiveIndex uses hash embeddings by default**: Without a configured `ProspectiveClient` (e.g., via `epica-anthropic`), write-time indexing uses `HashEmbedder` - a fast offline fallback, not semantic similarity.
 - **Causal contradiction is cross-belief only with explicit edges**: `check_contradiction()` detects structural changes on a single belief (same ID, different value). Cross-belief semantic contradiction — paraphrases, negations, synonyms across distinct beliefs — requires explicit `SemanticEdge::Contradicts` edges or Phase 4 embedding integration (TD-003).
 - **Causal contradiction is not semantic**: `check_contradiction()` compares JSON values literally. Negations, synonyms, and paraphrases are not caught (TD-003).
 - **Python SDK does not expose System 2 LLM injection**: `BeliefRuntime::with_llm_client()` is not bridged to Python; System 2 always returns `System1Only` or `System2Throttled` from Python (TD-P7-002).
 
 See [`docs/non_goals.md`](docs/non_goals.md) for accepted tradeoffs and [`docs/evidence.md`](docs/evidence.md) for the full evidence inventory.
+
+## See also
+
+| Document | Purpose |
+|---|---|
+| [ROADMAP.md](ROADMAP.md) | Canonical roadmap — phase status, priorities, open items |
+| [BENCHMARKS.md](BENCHMARKS.md) | Performance numbers (Criterion) with reproducibility metadata |
+| [docs/fuzzing.md](docs/fuzzing.md) | libFuzzer targets — how to run and interpret |
+| [docs/phase_roadmap.md](docs/phase_roadmap.md) | Operational verification scripts per phase |
+| [docs/audit_guide.md](docs/audit_guide.md) | Claim → implementation → test mapping |
 
 ---
 
