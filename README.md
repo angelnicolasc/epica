@@ -1,6 +1,8 @@
 # Epica
 
 [![CI](https://github.com/angelnicolasc/epica/actions/workflows/ci.yml/badge.svg)](https://github.com/angelnicolasc/epica/actions/workflows/ci.yml)
+[![Security Audit](https://github.com/angelnicolasc/epica/actions/workflows/audit.yml/badge.svg)](https://github.com/angelnicolasc/epica/actions/workflows/audit.yml)
+[![Supply Chain](https://github.com/angelnicolasc/epica/actions/workflows/deny.yml/badge.svg)](https://github.com/angelnicolasc/epica/actions/workflows/deny.yml)
 [![Rust: stable](https://img.shields.io/badge/rust-stable-orange.svg)](https://www.rust-lang.org/)
 [![MSRV: 1.82](https://img.shields.io/badge/MSRV-1.82-blue.svg)](https://blog.rust-lang.org/2024/10/17/Rust-1.82.0.html)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)

@@ -1,0 +1,64 @@
+name: Security Audit
+
+# Run cargo-audit against the workspace Cargo.lock to detect known
+# vulnerabilities in dependencies.
+#
+# Triggers:
+#   - Every push and pull request that touches Cargo.toml / Cargo.lock.
+#     Catches a regression at the PR boundary instead of waiting for the
+#     weekly run.
+#   - Weekly cron (Mondays 04:00 UTC) so newly-disclosed CVEs surface on a
+#     predictable cadence even on quiet weeks.
+#   - Manual via workflow_dispatch.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '**/Cargo.toml'
+      - '**/Cargo.lock'
+      - '.github/workflows/audit.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - '**/Cargo.toml'
+      - '**/Cargo.lock'
+      - '.github/workflows/audit.yml'
+  schedule:
+    # 04:00 UTC every Monday — outside US/EU working hours so a transient
+    # advisory-db hiccup does not interrupt anyone's day.
+    - cron: '0 4 * * 1'
+  workflow_dispatch:
+
+concurrency:
+  group: audit-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  cargo-audit:
+    name: cargo-audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain (stable)
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo-audit binary
+        uses: actions/cache@v4
+        with:
+          path: ~/.cargo/bin/cargo-audit
+          key: cargo-audit-bin-${{ runner.os }}
+
+      - name: Install cargo-audit
+        run: |
+          if ! command -v cargo-audit >/dev/null 2>&1; then
+            cargo install cargo-audit --locked
+          fi
+
+      - name: Run cargo audit
+        # --deny warnings escalates yanked / unmaintained / RUSTSEC notices to
+        # a CI failure. Adjust selectively in the future via --ignore RUSTSEC-…
+        run: cargo audit --deny warnings

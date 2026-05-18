@@ -1,0 +1,48 @@
+name: Supply Chain (cargo-deny)
+
+# cargo-deny enforces policies that cargo-audit cannot:
+#   - licence allowlist (only MIT / Apache-2.0 / BSD-style permitted)
+#   - banned crate list (avoid known-problematic crates)
+#   - duplicate-version detection (catches accidental dependency-tree bloat)
+#   - source allowlist (only crates.io permitted by default)
+#
+# Configuration lives in `deny.toml` at the repo root.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '**/Cargo.toml'
+      - '**/Cargo.lock'
+      - 'deny.toml'
+      - '.github/workflows/deny.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - '**/Cargo.toml'
+      - '**/Cargo.lock'
+      - 'deny.toml'
+      - '.github/workflows/deny.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: deny-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  cargo-deny:
+    name: cargo-deny check
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Run cargo-deny
+        # EmbarkStudios action handles install + cache + invocation. log-level
+        # warn so the run output is readable even when the check is green.
+        uses: EmbarkStudios/cargo-deny-action@v2
+        with:
+          log-level: warn
+          command: check
+          arguments: --all-features

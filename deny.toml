@@ -1,17 +1,33 @@
+# cargo-deny configuration — supply-chain policy for the Epica workspace.
+#
+# Schema: cargo-deny 0.16+ (deprecated keys removed).
+# Documentation: https://embarkstudios.github.io/cargo-deny/
+#
+# Three checks are enforced in CI:
+#   - advisories: known vulnerabilities (RUSTSEC) and unmaintained crates
+#   - licenses:   allowlist of compatible licences
+#   - bans:       duplicate-version detection, banned-crate enforcement
+#
+# Run locally:
+#   cargo install cargo-deny --locked
+#   cargo deny check --all-features
+
 [graph]
-targets = []
+all-features = true
 
+# ── Advisories ──────────────────────────────────────────────────────────────
 [advisories]
-db-path       = "~/.cargo/advisory-db"
-db-urls       = ["https://github.com/rustsec/advisory-db"]
-vulnerability = "deny"
-unmaintained  = "warn"
-unsound       = "deny"
-yanked        = "deny"
-notice        = "warn"
+db-path = "~/.cargo/advisory-db"
+db-urls = ["https://github.com/rustsec/advisory-db"]
+# Yanked crates are downgraded to warn — `cargo update` can transiently pick
+# them up; surface, do not block.
+yanked = "warn"
+ignore = []
 
+# ── Licences ────────────────────────────────────────────────────────────────
 [licenses]
-unlicensed = "deny"
+# Permissive only. AGPL / GPL / LGPL are NOT allowed: Epica ships under
+# MIT OR Apache-2.0 and copyleft would transitively contaminate the build.
 allow = [
     "MIT",
     "Apache-2.0",
@@ -20,16 +36,27 @@ allow = [
     "BSD-3-Clause",
     "ISC",
     "Unicode-DFS-2016",
+    "Unicode-3.0",
     "Zlib",
+    "CC0-1.0",
+    "MPL-2.0",  # weak copyleft; required by webpki-roots and friends
+    "OpenSSL",  # required by some TLS leaves on Linux
 ]
-deny     = ["GPL-2.0", "GPL-3.0", "AGPL-3.0"]
-copyleft = "deny"
+confidence-threshold = 0.93
+exceptions = []
 
+# ── Bans (duplicate versions, banned crates) ────────────────────────────────
 [bans]
 multiple-versions = "warn"
-wildcards         = "deny"
+wildcards = "deny"
+highlight = "all"
+deny = []
+skip = []
+skip-tree = []
 
+# ── Sources ─────────────────────────────────────────────────────────────────
 [sources]
 unknown-registry = "deny"
-unknown-git      = "deny"
-allow-registry   = ["https://github.com/rust-lang/crates.io-index"]
+unknown-git = "deny"
+allow-registry = ["https://github.com/rust-lang/crates.io-index"]
+allow-git = []
