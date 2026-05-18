@@ -28,5 +28,15 @@ governor.workspace     = true
 async-trait            = { workspace = true, optional = true }
 
 [dev-dependencies]
-tokio    = { workspace = true, features = ["test-util"] }
+tokio    = { workspace = true, features = ["test-util", "rt-multi-thread", "macros"] }
 proptest.workspace = true
+uuid.workspace = true
+serde_json.workspace = true
+
+[[example]]
+name = "multi_agent"
+path = "../../examples/multi_agent.rs"
+
+[[example]]
+name = "long_horizon"
+path = "../../examples/long_horizon.rs"
