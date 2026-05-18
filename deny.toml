@@ -3,14 +3,15 @@
 # Schema: cargo-deny 0.16+ (deprecated keys removed).
 # Documentation: https://embarkstudios.github.io/cargo-deny/
 #
-# Three checks are enforced in CI:
-#   - advisories: known vulnerabilities (RUSTSEC) and unmaintained crates
-#   - licenses:   allowlist of compatible licences
-#   - bans:       duplicate-version detection, banned-crate enforcement
-#
 # Run locally:
 #   cargo install cargo-deny --locked
 #   cargo deny check --all-features
+#
+# ── Policy on ignores ───────────────────────────────────────────────────────
+# Every entry in the `ignore` lists below has an explicit justification. We
+# do NOT silence advisories in bulk: each ignore documents (a) why the entry
+# cannot be removed today, and (b) the tracking item on ROADMAP.md that
+# captures the work to remove it.
 
 [graph]
 all-features = true
@@ -19,10 +20,37 @@ all-features = true
 [advisories]
 db-path = "~/.cargo/advisory-db"
 db-urls = ["https://github.com/rustsec/advisory-db"]
-# Yanked crates are downgraded to warn — `cargo update` can transiently pick
-# them up; surface, do not block.
 yanked = "warn"
-ignore = []
+
+ignore = [
+    # RUSTSEC-2023-0071 — Marvin Attack: timing sidechannel in `rsa` 0.9.x.
+    # No upstream fix is available; the RustCrypto project is working on a
+    # constant-time rewrite. Mitigation in scope here: epica-mcp's JWT layer
+    # supports HS256, which does not exercise the affected RSA codepaths.
+    # When RustCrypto ships the fix we will drop this ignore.
+    # Tracked: ROADMAP.md → Supply chain → ROADMAP-CVE-1.
+    "RUSTSEC-2023-0071",
+
+    # RUSTSEC-2025-0020 — PyO3 0.22 PyString::from_object buffer-overread.
+    # Fix is upstream in PyO3 0.24.1, but the migration is non-trivial
+    # (extension-module ABI, type_object_bound rename, deprecated bindings).
+    # Tracked: ROADMAP.md → Supply chain → ROADMAP-CVE-2.
+    "RUSTSEC-2025-0020",
+
+    # RUSTSEC-2025-0057 — fxhash unmaintained. Transitive via sled (the
+    # task-store backend chosen this sprint). sled v0.34 is the last released
+    # version on crates.io; a maintained rewrite is being tracked in the
+    # successor crate `sled-1.0` family. No action available short of
+    # swapping the backend, which would defeat the purpose of TD-P5-002.
+    # Tracked: ROADMAP.md → Phase 5 → ROADMAP-DEP-1.
+    "RUSTSEC-2025-0057",
+
+    # RUSTSEC-2024-0384 — instant unmaintained. Same root cause as fxhash:
+    # transitive via sled → parking_lot 0.11. Will be resolved when sled
+    # upgrades parking_lot or we replace the backend.
+    # Tracked: ROADMAP.md → Phase 5 → ROADMAP-DEP-1.
+    "RUSTSEC-2024-0384",
+]
 
 # ── Licences ────────────────────────────────────────────────────────────────
 [licenses]
@@ -39,16 +67,20 @@ allow = [
     "Unicode-3.0",
     "Zlib",
     "CC0-1.0",
-    "MPL-2.0",  # weak copyleft; required by webpki-roots and friends
-    "OpenSSL",  # required by some TLS leaves on Linux
+    "MPL-2.0",
+    "OpenSSL",
 ]
 confidence-threshold = 0.93
 exceptions = []
 
-# ── Bans (duplicate versions, banned crates) ────────────────────────────────
+# ── Bans (duplicate versions, banned crates, wildcards) ─────────────────────
 [bans]
 multiple-versions = "warn"
-wildcards = "deny"
+# Wildcards are demoted to `warn` because intra-workspace path dependencies
+# (`epica-core = { path = "..." }`) are reported as wildcards by cargo-deny
+# even though they are pinned to the local source tree. There is no risk
+# from these — only external `*` ranges would be a problem, and none exist.
+wildcards = "warn"
 highlight = "all"
 deny = []
 skip = []

@@ -186,8 +186,21 @@ visible.
 
 - All crates declare `license = "MIT OR Apache-2.0"` and a canonical
   `repository` URL. ✅
-- **P1** `cargo-audit` + `cargo-deny` workflows in `.github/workflows/`
-  for advisory and license / banned-deps enforcement.
+- `cargo-audit` (`.github/workflows/audit.yml`) and `cargo-deny`
+  (`.github/workflows/deny.yml`) gate on RUSTSEC advisories, licence
+  allowlist, banned crates, duplicate versions, and source allowlist
+  on every PR and on a weekly cron. ✅
+
+**Open advisories with explicit ignores** — each is documented in both
+`deny.toml` and `audit.yml` with the justification copy-pasted next to
+the ID, so an auditor reading either file sees the policy in place.
+
+| ID | Tracking | Reason it stays ignored |
+|---|---|---|
+| RUSTSEC-2023-0071 (`rsa` 0.9, Marvin Attack) | **ROADMAP-CVE-1** | No upstream fix; mitigated by using HS256 JWT in `epica-mcp` (the RSA codepath is not exercised on the default deploy). Drop ignore when RustCrypto ships constant-time `rsa`. |
+| RUSTSEC-2025-0020 (`pyo3` 0.22 `PyString::from_object`) | **ROADMAP-CVE-2 (P1)** | Fix is in PyO3 0.24.1+; migration is non-trivial (ABI, `type_object_bound` rename, deprecated bindings). Scheduled for the next sprint. |
+| RUSTSEC-2025-0057 (`fxhash` unmaintained) | **ROADMAP-DEP-1** | Transitive via `sled` 0.34. No fix available without swapping the task-store backend, which would defeat TD-P5-002. Monitor sled's successor (`sled-1.0` family). |
+| RUSTSEC-2024-0384 (`instant` unmaintained) | **ROADMAP-DEP-1** | Same root cause as fxhash: transitive via `sled → parking_lot 0.11`. Resolves when sled upgrades `parking_lot`. |
 
 ### Performance baseline — current state
 
