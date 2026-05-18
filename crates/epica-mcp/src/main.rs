@@ -97,26 +97,84 @@ fn main() {
         });
 
     // ── Runtime ────────────────────────────────────────────────────────────────
-    let runtime = Arc::new(
-        BeliefRuntime::new(
-            BeliefQuad::new(),
-            reliability_baseline,
-            system2_budget,
-            system2_refill_rate,
-        )
-        .with_default_tau(reflection_threshold),
-    );
+    let mut runtime = BeliefRuntime::new(
+        BeliefQuad::new(),
+        reliability_baseline,
+        system2_budget,
+        system2_refill_rate,
+    )
+    .with_default_tau(reflection_threshold);
+
+    // ── LLM provider selection (System 2 reflection) ──────────────────────────
+    // `EPICA_LLM_PROVIDER` selects which client gets attached:
+    //   - "anthropic" (default when the `anthropic` feature is on)
+    //   - "openai"    (requires the `openai` feature)
+    //   - "none"      (no client; System 2 returns Pending and tasks never advance)
+    //
+    // Missing API keys are treated as configuration errors: log loud and run
+    // without System 2 rather than panicking, so the rest of the server stays
+    // up. This is intentional — degraded mode is observable via /health and
+    // the system2_throttled metric, while a hard crash is not.
+    let provider = env_or("EPICA_LLM_PROVIDER", default_provider());
+    match provider.to_lowercase().as_str() {
+        "none" => {
+            tracing::info!("LLM provider: none (System 2 reflection disabled)");
+        }
+        #[cfg(feature = "anthropic")]
+        "anthropic" => match epica_anthropic::AnthropicLlmClient::from_env() {
+            Ok(client) => {
+                runtime = runtime.with_llm_client(Arc::new(client));
+                tracing::info!("LLM provider: anthropic (Messages API)");
+            }
+            Err(e) => tracing::warn!(error = %e, "ANTHROPIC_API_KEY missing — System 2 disabled"),
+        },
+        #[cfg(feature = "openai")]
+        "openai" => match epica_openai::OpenAiLlmClient::from_env() {
+            Ok(client) => {
+                runtime = runtime.with_llm_client(Arc::new(client));
+                tracing::info!("LLM provider: openai (Chat Completions API, gpt-4o-mini)");
+            }
+            Err(e) => tracing::warn!(error = %e, "OPENAI_API_KEY missing — System 2 disabled"),
+        },
+        other => {
+            tracing::warn!(
+                provider = %other,
+                "unknown or unavailable LLM provider — System 2 disabled. \
+                 Rebuild with --features openai or --features anthropic to enable."
+            );
+        }
+    }
+
+    let runtime = Arc::new(runtime);
 
     tracing::info!(
         addr = %addr,
         no_auth = no_auth,
         system2_budget = system2_budget,
         reliability_baseline = reliability_baseline,
+        llm_provider = %provider,
         "starting epica-serve v{}",
         env!("CARGO_PKG_VERSION")
     );
 
     epica_mcp::serve_blocking(runtime, addr, auth, contract);
+}
+
+/// Compile-time default for `EPICA_LLM_PROVIDER`. Falls back to "none" when
+/// no provider feature is enabled so the binary still serves without an LLM.
+fn default_provider() -> &'static str {
+    #[cfg(feature = "anthropic")]
+    {
+        "anthropic"
+    }
+    #[cfg(all(not(feature = "anthropic"), feature = "openai"))]
+    {
+        "openai"
+    }
+    #[cfg(not(any(feature = "anthropic", feature = "openai")))]
+    {
+        "none"
+    }
 }
 
 fn env_or(key: &str, default: &str) -> String {

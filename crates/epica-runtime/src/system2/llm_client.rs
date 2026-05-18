@@ -35,14 +35,26 @@ pub trait LlmClient: Send + Sync {
 }
 
 /// Errors from LLM client calls.
+///
+/// Variants are split along the retry-policy axis: implementations classify
+/// each failure mode by whether retrying it can plausibly succeed, so the
+/// retry layer can be a one-liner over `is_retryable`.
 #[derive(Debug, thiserror::Error)]
 pub enum LlmClientError {
+    /// Network / transport failure or 5xx response. Retryable.
     #[error("network error: {0}")]
     Network(String),
 
+    /// HTTP 4xx other than 429 — bad request, auth, payload-too-large, etc.
+    /// Not retryable: the same call will fail the same way on the next attempt.
+    #[error("client error: {0}")]
+    ClientError(String),
+
+    /// Response could not be parsed into the expected schema. Not retryable.
     #[error("deserialization failed: {0}")]
     Deserialize(String),
 
+    /// HTTP 429 — retryable after backoff.
     #[error("rate limited")]
     RateLimited,
 }

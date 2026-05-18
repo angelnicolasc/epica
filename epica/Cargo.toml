@@ -18,7 +18,9 @@ contracts = ["dep:epica-contracts"]
 macros    = ["dep:epica-macros"]
 mcp       = ["dep:epica-mcp"]
 memory    = ["dep:epica-memory"]
-full      = ["core", "runtime", "contracts", "macros", "mcp", "memory"]
+anthropic = ["dep:epica-anthropic"]
+openai    = ["dep:epica-openai"]
+full      = ["core", "runtime", "contracts", "macros", "mcp", "memory", "anthropic", "openai"]
 
 [dependencies]
 epica-core      = { path = "../crates/epica-core",      optional = true }
@@ -27,6 +29,8 @@ epica-contracts = { path = "../crates/epica-contracts", optional = true }
 epica-macros    = { path = "../crates/epica-macros",    optional = true }
 epica-mcp       = { path = "../crates/epica-mcp",       optional = true }
 epica-memory    = { path = "../crates/epica-memory",    optional = true }
+epica-anthropic = { path = "../crates/epica-anthropic", optional = true }
+epica-openai    = { path = "../crates/epica-openai",    optional = true }
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["test-util"] }

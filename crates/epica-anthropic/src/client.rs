@@ -144,6 +144,10 @@ impl AnthropicLlmClient {
             warn!("System 2: Anthropic rate limit hit");
             return Err(LlmClientError::RateLimited);
         }
+        if status.is_client_error() {
+            let text = response.text().await.unwrap_or_default();
+            return Err(LlmClientError::ClientError(format!("HTTP {status}: {text}")));
+        }
         if !status.is_success() {
             let text = response.text().await.unwrap_or_default();
             return Err(LlmClientError::Network(format!("HTTP {status}: {text}")));
@@ -221,6 +225,9 @@ impl ProspectiveClient for AnthropicLlmClient {
             warn!("prospective: Anthropic rate limit hit");
             return Err(ProspectiveClientError::RateLimited);
         }
+        // ProspectiveClientError does not (yet) split 4xx/5xx; both flow through
+        // the Network variant. The retry layer for prospective indexing is a
+        // separate concern from System 2 and out of scope for this commit.
         if !status.is_success() {
             let text = response.text().await.unwrap_or_default();
             return Err(ProspectiveClientError::Network(format!("HTTP {status}: {text}")));

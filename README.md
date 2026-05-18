@@ -70,7 +70,39 @@ Seven Rust crates compile with `cargo check --workspace --exclude crates/epica-p
 | Python System 2 injection | **Not exposed** | `BeliefRuntime::with_llm_client()` not yet bridged to Python (TD-P7-002) |
 | Python async (`await`) | **Not available** | `pyo3-asyncio` with pyo3 0.22 is unstable (TD-P6-001) |
 | Neo4j persistence | **Returns `Err`** | No stable Rust driver; graceful error present (TD-NEW-001) |
-| Phase 1 perf benchmarks | **Targets set; not yet measured** | Run `cargo bench -p epica-core` to measure |
+| Phase 1 perf benchmarks | **Measured** | See [BENCHMARKS.md](./BENCHMARKS.md) for numbers + methodology |
+
+---
+
+## LLM providers (System 2 reflection)
+
+The `LlmClient` trait in `epica-runtime` is provider-agnostic. Two production
+clients ship in this workspace; both share the same retry policy (exponential
+backoff with deterministic jitter, 3 attempts) and the same error taxonomy
+(`Network` / `ClientError` / `RateLimited` / `Deserialize`).
+
+| Provider | Crate | Default model | Selected via |
+|---|---|---|---|
+| Anthropic | `epica-anthropic` | `claude-sonnet-4-6` | `EPICA_LLM_PROVIDER=anthropic` + `ANTHROPIC_API_KEY` |
+| OpenAI | `epica-openai` | `gpt-4o-mini` | `EPICA_LLM_PROVIDER=openai` + `OPENAI_API_KEY` |
+
+Build `epica-serve` with the providers you need:
+
+```bash
+# Default — Anthropic only
+cargo build --bin epica-serve
+
+# OpenAI only
+cargo build --bin epica-serve --no-default-features --features "server openai"
+
+# Both bundled, choose at runtime
+cargo build --bin epica-serve --features "anthropic openai"
+```
+
+Add a new provider by implementing `epica_runtime::LlmClient::reflect` in a
+new crate that follows the `epica-openai` template (`config.rs` + `client.rs`
++ `wiremock` integration test). No changes to `epica-core` or `epica-runtime`
+are required.
 
 ---
 

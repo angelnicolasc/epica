@@ -11,12 +11,18 @@ keywords             = ["mcp", "belief-revision", "llm-agents", "http-server", "
 categories           = ["web-programming::http-server", "asynchronous"]
 
 [features]
-default    = ["server"]
+default    = ["server", "anthropic"]
 server     = ["dep:axum", "dep:tower", "dep:tower-http", "dep:hyper"]
 # Embedded persistent task store backed by sled. Enables SledTaskStore and the
 # `sled:` URI scheme in EPICA_TASKSTORE. Cost: ~1.5 MB compile-time, ~5 ms warm
 # startup to open the database.
 sled-store = ["dep:sled"]
+# Bundle the Anthropic LLM client into the epica-serve binary. Enables
+# `EPICA_LLM_PROVIDER=anthropic` (the default when this feature is on).
+anthropic  = ["dep:epica-anthropic"]
+# Bundle the OpenAI LLM client into the epica-serve binary. Enables
+# `EPICA_LLM_PROVIDER=openai`.
+openai     = ["dep:epica-openai"]
 
 [dependencies]
 epica-core.path      = "../epica-core"
@@ -41,6 +47,8 @@ tower      = { workspace = true, optional = true }
 tower-http = { workspace = true, optional = true }
 hyper      = { workspace = true, optional = true }
 sled       = { version = "0.34", optional = true }
+epica-anthropic = { path = "../epica-anthropic", optional = true }
+epica-openai    = { path = "../epica-openai",    optional = true }
 
 [[bin]]
 name              = "epica-serve"

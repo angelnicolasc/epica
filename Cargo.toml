@@ -5,6 +5,7 @@ members = [
     "crates/epica-core",
     "crates/epica-runtime",
     "crates/epica-anthropic",
+    "crates/epica-openai",
     "crates/epica-contracts",
     "crates/epica-macros",
     "crates/epica-mcp",
@@ -22,6 +23,7 @@ default-members = [
     "crates/epica-core",
     "crates/epica-runtime",
     "crates/epica-anthropic",
+    "crates/epica-openai",
     "crates/epica-contracts",
     "crates/epica-macros",
     "crates/epica-mcp",
@@ -69,6 +71,7 @@ toml           = "0.8"
 # Testing
 proptest       = "1.5"
 criterion      = { version = "0.5", features = ["html_reports"] }
+wiremock       = "0.6"
 
 # Proc-macro dependencies (only for epica-macros)
 syn            = { version = "2.0", features = ["full"] }
