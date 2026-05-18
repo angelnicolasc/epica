@@ -2,6 +2,7 @@ pub mod causal;
 pub mod entity;
 pub mod semantic;
 pub mod temporal;
+pub mod viz;
 
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -252,6 +253,11 @@ impl BeliefQuad {
 
     pub fn causal(&self) -> &CausalGraph {
         &self.causal
+    }
+
+    /// Read-only accessor for the semantic graph projection.
+    pub fn semantic(&self) -> &SemanticGraph {
+        &self.semantic
     }
 
     pub fn prospective_index_mut(&mut self) -> &mut ProspectiveIndex {

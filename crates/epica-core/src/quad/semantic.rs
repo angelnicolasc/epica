@@ -106,6 +106,18 @@ impl SemanticGraph {
             .collect()
     }
 
+    /// Iterate over every semantic edge as `(from, to, weight)`.
+    ///
+    /// Used by the visualisation layer to render semantic relationships
+    /// alongside the causal graph.
+    pub fn all_edges(&self) -> Vec<(BeliefId, BeliefId, SemanticEdge)> {
+        use petgraph::visit::IntoEdgeReferences;
+        self.graph
+            .edge_references()
+            .map(|e| (self.graph[e.source()], self.graph[e.target()], e.weight().clone()))
+            .collect()
+    }
+
     /// Phase 1 value-level contradiction check.
     ///
     /// Returns `true` if `new_value` directly contradicts the existing value on a

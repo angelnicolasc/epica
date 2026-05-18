@@ -159,6 +159,19 @@ impl CausalGraph {
             .map(|e| (self.graph[e.source()], e.weight().clone()))
             .collect()
     }
+
+    /// Iterate over every edge as `(from, to, weight)` tuples.
+    ///
+    /// Used by the visualisation layer to emit Graphviz DOT and by any
+    /// external code that needs to walk the full causal projection without
+    /// reaching into `petgraph` internals.
+    pub fn all_edges(&self) -> Vec<(BeliefId, BeliefId, CausalEdge)> {
+        use petgraph::visit::{EdgeRef, IntoEdgeReferences};
+        self.graph
+            .edge_references()
+            .map(|e| (self.graph[e.source()], self.graph[e.target()], e.weight().clone()))
+            .collect()
+    }
 }
 
 impl Default for CausalGraph {

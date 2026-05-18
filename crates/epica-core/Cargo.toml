@@ -48,3 +48,7 @@ path = "../../examples/minimal_revision.rs"
 [[example]]
 name = "codebase_agent"
 path = "../../examples/codebase_agent.rs"
+
+[[example]]
+name = "visualize_quad"
+path = "../../examples/visualize_quad.rs"

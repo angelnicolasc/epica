@@ -183,6 +183,31 @@ See [`docs/audit_guide.md`](docs/audit_guide.md) for a structured review that ma
 
 See [`docs/non_goals.md`](docs/non_goals.md) for accepted tradeoffs and [`docs/evidence.md`](docs/evidence.md) for the full evidence inventory.
 
+## Visualising a `BeliefQuad`
+
+`epica_core::quad::viz::to_dot(&quad)` returns a [Graphviz
+DOT](https://graphviz.org/) document with nodes colour-coded by
+`fast_confidence` and edges styled per relationship type (causal
+inference, counterfactual, semantic contradiction, subsumption).
+
+Generate and render the sample quad shipped under `examples/`:
+
+```bash
+cargo run --example visualize_quad > out.dot
+dot -Tsvg out.dot > out.svg     # requires graphviz on PATH
+```
+
+The MCP server exposes the same serialisation live at
+`GET /v1/visualize/dot` (Content-Type `text/vnd.graphviz`), so an MCP
+host can render the current state of the runtime as a tab in its UI
+without parsing JSON or walking the graph itself.
+
+```bash
+curl http://localhost:8765/v1/visualize/dot | dot -Tsvg > current.svg
+```
+
+---
+
 ## See also
 
 | Document | Purpose |

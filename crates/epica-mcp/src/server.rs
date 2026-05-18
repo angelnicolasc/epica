@@ -28,6 +28,7 @@ use crate::{
         health::{handle_health, handle_metrics, handle_ready},
         query::{handle_belief_query, handle_counterfactual, handle_diff},
         task_stream::handle_task_stream,
+        visualize::handle_visualize_dot,
     },
     middleware::{build_rate_limiter, cors_layer, rate_limit_middleware},
     server_card::McpServerCard,
@@ -71,6 +72,8 @@ pub fn build_router(state: Arc<AppState>) -> Router {
         .route("/v1/query", post(handle_belief_query))
         .route("/v1/counterfactual", post(handle_counterfactual))
         .route("/v1/diff", post(handle_diff))
+        // ── Visualisation ────────────────────────────────────────────────────────
+        .route("/v1/visualize/dot", get(handle_visualize_dot))
         // ── State ────────────────────────────────────────────────────────────────
         .with_state(state)
         // ── Middleware stack — layers applied inside-out, so LAST = OUTERMOST ───
