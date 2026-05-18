@@ -1,0 +1,32 @@
+[package]
+name        = "epica-core-fuzz"
+version     = "0.0.0"
+publish     = false
+edition     = "2021"
+description = "cargo-fuzz targets for epica-core (revise, provenance parsing)"
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+serde_json    = "1.0"
+
+[dependencies.epica-core]
+path = ".."
+
+# Each target needs `test = false`, `doc = false` and `bench = false` —
+# cargo-fuzz consumes them as binaries, not Rust crates.
+[[bin]]
+name = "fuzz_revise"
+path = "fuzz_targets/fuzz_revise.rs"
+test = false
+doc  = false
+bench = false
+
+[[bin]]
+name = "fuzz_belief_value"
+path = "fuzz_targets/fuzz_belief_value.rs"
+test = false
+doc  = false
+bench = false

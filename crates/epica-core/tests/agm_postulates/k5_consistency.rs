@@ -2,6 +2,7 @@
 //! A consistent new belief produces a non-empty revised set.
 
 use epica_core::{BeliefNode, BeliefQuad, BeliefValue, Provenance};
+use proptest::prelude::*;
 
 #[test]
 fn k5_revision_with_consistent_value_produces_nonempty_quad() {
@@ -58,4 +59,47 @@ fn k5_audit_consistency_flag_is_set() {
 
     assert!(record.postulate_audit.consistency);
     assert!(record.postulate_audit.success);
+}
+
+proptest! {
+    /// K*5 (Consistency) over arbitrary `Asserted` revisions: for ANY consistent
+    /// new value (i.e. any non-empty string), the post-revision quad must remain
+    /// non-empty and the consistency audit flag must be `true`.
+    ///
+    /// Generates random ASCII strings with length 1..32, ensuring `new_str` is
+    /// always parseable as a consistent atom. Confidence is sampled across the
+    /// full unit interval to exercise clamp paths.
+    #[test]
+    fn k5_arbitrary_consistent_revision(
+        original in "[a-zA-Z0-9 ]{1,32}",
+        new in "[a-zA-Z0-9 ]{1,32}",
+        confidence in 0.0f32..=1.0f32,
+    ) {
+        let mut quad = BeliefQuad::new();
+        let id = quad.insert(BeliefNode::new(
+            "k5_prop",
+            BeliefValue::Asserted(original),
+            Provenance::UserStatement { turn: 0 },
+            0.5,
+        ));
+
+        let result = quad.revise(
+            id,
+            BeliefValue::Asserted(new),
+            Provenance::UserStatement { turn: 1 },
+            confidence,
+        );
+
+        prop_assert!(result.is_ok(), "K*5: every consistent atom must be admissible");
+        let record = result.unwrap();
+        prop_assert!(record.postulate_audit.consistency, "K*5: consistency audit must hold");
+        prop_assert!(!quad.is_empty(), "K*5: quad must remain non-empty");
+
+        // Confidence clamp invariant — separate sanity check, but cheap to verify here.
+        let node = quad.get(id).expect("revised node must exist");
+        prop_assert!(
+            (0.0..=1.0).contains(&node.fast_confidence),
+            "fast_confidence must remain in [0, 1] after clamp"
+        );
+    }
 }

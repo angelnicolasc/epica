@@ -11,6 +11,12 @@ members = [
     "crates/epica-memory",
     "crates/epica-python",
 ]
+# Fuzz crates are standalone cargo-fuzz packages: they depend on libfuzzer-sys,
+# require nightly + the libFuzzer runtime, and must NOT be pulled into the
+# normal workspace build.
+exclude = [
+    "crates/epica-core/fuzz",
+]
 default-members = [
     "epica",
     "crates/epica-core",
