@@ -7,6 +7,21 @@
 //! - Mnemonic Sovereignty (arXiv:2604.16548)
 //!
 //! **Phase 3** — fully implemented.
+//!
+//! ## Quick start: an allowlist write-auth policy
+//!
+//! ```
+//! use epica_contracts::{AllowedAgents, AuthPolicy, MnemonicSovereignty};
+//!
+//! let mut sov = MnemonicSovereignty::permissive();
+//! sov.write_auth = AuthPolicy {
+//!     allowed_agents: AllowedAgents::Allowlist(vec!["alice".into()]),
+//!     require_audit: false,
+//! };
+//!
+//! assert!(sov.check_write_auth("alice").is_ok());
+//! assert!(sov.check_write_auth("eve").is_err(), "non-listed agent must be rejected");
+//! ```
 
 pub mod config;
 pub mod contract;

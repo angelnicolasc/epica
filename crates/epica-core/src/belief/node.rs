@@ -63,6 +63,22 @@ impl BeliefNode {
     ///
     /// `created_at_ms` is set to the current wall-clock time.
     /// `reflection_threshold` defaults to [`DEFAULT_REFLECTION_THRESHOLD`][crate::belief::confidence::DEFAULT_REFLECTION_THRESHOLD].
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use epica_core::{BeliefNode, BeliefValue, Provenance};
+    ///
+    /// let node = BeliefNode::new(
+    ///     "intent",
+    ///     BeliefValue::Asserted("refactor".into()),
+    ///     Provenance::UserStatement { turn: 0 },
+    ///     1.5, // out-of-range — clamped to 1.0
+    /// );
+    /// assert_eq!(node.key, "intent");
+    /// assert_eq!(node.fast_confidence, 1.0, "confidence is clamped to [0, 1]");
+    /// assert!(node.slow_confidence.is_none(), "System 2 has not run yet");
+    /// ```
     pub fn new(key: impl Into<String>, value: BeliefValue, provenance: Provenance, confidence: f32) -> Self {
         use std::time::{SystemTime, UNIX_EPOCH};
         let now_ms = SystemTime::now()

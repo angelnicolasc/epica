@@ -35,6 +35,35 @@ impl BeliefQuad {
     ///
     /// 3. **Invalidation**: clear the prospective index entry for `id` (regenerated
     ///    at write-time in Phase 4).
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use epica_core::{BeliefNode, BeliefQuad, BeliefValue, Provenance};
+    ///
+    /// let mut quad = BeliefQuad::new();
+    /// let id = quad.insert(BeliefNode::new(
+    ///     "intent",
+    ///     BeliefValue::Asserted("read".into()),
+    ///     Provenance::UserStatement { turn: 0 },
+    ///     0.7,
+    /// ));
+    ///
+    /// let record = quad.revise(
+    ///     id,
+    ///     BeliefValue::Asserted("write".into()),
+    ///     Provenance::UserStatement { turn: 1 },
+    ///     0.9,
+    /// ).expect("contradicting revision succeeds");
+    ///
+    /// assert_eq!(record.belief_id, id);
+    /// assert!(record.postulate_audit.all_critical_pass());
+    /// assert_eq!(
+    ///     quad.get(id).unwrap().value,
+    ///     BeliefValue::Asserted("write".into()),
+    ///     "K*2: revised value must be present"
+    /// );
+    /// ```
     pub fn revise(
         &mut self,
         belief_id: BeliefId,

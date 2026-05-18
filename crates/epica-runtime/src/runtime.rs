@@ -189,6 +189,25 @@ impl BeliefRuntime {
     /// If `node.prospect == true` and a [`ProspectiveClient`] + [`Embedder`]
     /// are attached, triggers write-time scenario indexing (TD-001, Phase 4).
     /// Indexing is best-effort: failures are logged but do not block insertion.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use epica_core::{BeliefNode, BeliefQuad, BeliefValue, Provenance};
+    /// use epica_runtime::BeliefRuntime;
+    ///
+    /// # async fn run() {
+    /// let rt = BeliefRuntime::new(BeliefQuad::new(), 0.5, 10, 1.0);
+    /// let id = rt.insert_belief(BeliefNode::new(
+    ///     "intent",
+    ///     BeliefValue::Asserted("ship".into()),
+    ///     Provenance::UserStatement { turn: 0 },
+    ///     0.8,
+    /// )).await;
+    /// assert_eq!(rt.get_by_key("intent").await, Some(id));
+    /// # }
+    /// # tokio::runtime::Runtime::new().unwrap().block_on(run());
+    /// ```
     pub async fn insert_belief(&self, node: BeliefNode) -> BeliefId {
         let should_index = node.prospect;
         let key = node.key.clone();
@@ -269,9 +288,36 @@ impl BeliefRuntime {
     ///    as incorrect.
     /// 3. System 2 check — only when an `LlmClient` is attached:
     ///    - `|fast_conf − reliability_baseline| ≤ per_node_τ` → skip.
-    ///    - Budget empty → `System2Throttled` (token not consumed).
-    ///    - Budget available → LLM call, `slow_confidence` written, token consumed.
+    ///    - Otherwise → return `System2Pending { signal }` so the caller can
+    ///      drive the LLM call asynchronously.
     /// 4. Append effective confidence (System 2 revised, or fast) to history.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use epica_core::{BeliefNode, BeliefQuad, BeliefValue, Provenance};
+    /// use epica_runtime::{BeliefRuntime, RuntimeUpdateResult};
+    ///
+    /// # async fn run() {
+    /// let rt = BeliefRuntime::new(BeliefQuad::new(), 0.5, 10, 1.0);
+    /// let id = rt.insert_belief(BeliefNode::new(
+    ///     "intent",
+    ///     BeliefValue::Asserted("v0".into()),
+    ///     Provenance::UserStatement { turn: 0 },
+    ///     0.5,
+    /// )).await;
+    ///
+    /// // Without an LLM client attached, even high divergence stays System 1.
+    /// let result = rt.update_belief(
+    ///     id,
+    ///     BeliefValue::Asserted("v1".into()),
+    ///     Provenance::UserStatement { turn: 1 },
+    ///     0.95, // divergence 0.45 > tau 0.15 — but no client
+    /// ).await.unwrap();
+    /// assert!(matches!(result, RuntimeUpdateResult::System1Only));
+    /// # }
+    /// # tokio::runtime::Runtime::new().unwrap().block_on(run());
+    /// ```
     pub async fn update_belief(
         &self,
         id: BeliefId,
@@ -370,6 +416,27 @@ impl BeliefRuntime {
     /// confidence entry that `update_belief()` pushed when returning `System2Pending`.
     /// This keeps each belief revision as a single T-ECE data point: the LLM's
     /// recalibrated estimate, not a duplicate fast+slow pair.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use epica_core::{BeliefNode, BeliefQuad, BeliefValue, Provenance};
+    /// use epica_runtime::BeliefRuntime;
+    ///
+    /// # async fn run() {
+    /// let rt = BeliefRuntime::new(BeliefQuad::new(), 0.5, 10, 1.0);
+    /// let id = rt.insert_belief(BeliefNode::new(
+    ///     "k", BeliefValue::Asserted("v".into()),
+    ///     Provenance::UserStatement { turn: 0 }, 0.9,
+    /// )).await;
+    ///
+    /// // Simulate the handler flow: the LLM came back with 0.77.
+    /// rt.apply_system2_result(id, 0.77).await;
+    /// let quad = rt.read_quad().await;
+    /// assert_eq!(quad.get(id).unwrap().slow_confidence, Some(0.77));
+    /// # }
+    /// # tokio::runtime::Runtime::new().unwrap().block_on(run());
+    /// ```
     #[cfg(feature = "system2")]
     pub async fn apply_system2_result(&self, id: BeliefId, revised_confidence: f32) {
         {

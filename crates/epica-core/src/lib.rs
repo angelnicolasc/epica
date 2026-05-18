@@ -24,6 +24,34 @@
 //!
 //! This crate implements **Phase 1** of the Epica roadmap. See `docs/phase_roadmap.md`
 //! and `DEVLOG.md` for what is real vs. stubbed in the full workspace.
+//!
+//! ## Quick start
+//!
+//! ```rust
+//! use epica_core::{BeliefNode, BeliefQuad, BeliefValue, Provenance};
+//!
+//! let mut quad = BeliefQuad::new();
+//!
+//! // Insert a belief and verify it round-trips by id.
+//! let id = quad.insert(BeliefNode::new(
+//!     "user_intent",
+//!     BeliefValue::Asserted("refactor auth".into()),
+//!     Provenance::UserStatement { turn: 0 },
+//!     0.9,
+//! ));
+//! assert_eq!(quad.get(id).unwrap().key, "user_intent");
+//!
+//! // Revise the belief (Levi identity: contract-then-expand on contradiction).
+//! let record = quad.revise(
+//!     id,
+//!     BeliefValue::Asserted("ship feature X".into()),
+//!     Provenance::UserStatement { turn: 1 },
+//!     0.85,
+//! ).expect("revision succeeds");
+//! assert_eq!(record.belief_id, id);
+//! assert!(record.postulate_audit.all_critical_pass(),
+//!         "K*2-K*5 are hard errors in every build");
+//! ```
 
 pub mod belief;
 pub mod checkpoint;

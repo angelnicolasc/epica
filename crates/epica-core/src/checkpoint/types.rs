@@ -53,6 +53,28 @@ pub struct BeliefQuadCheckpoint {
 }
 
 impl BeliefQuadCheckpoint {
+    /// Capture an immutable snapshot of `quad` at its current version.
+    ///
+    /// The snapshot strips its own nested checkpoint history (see the body of
+    /// this method) to avoid the O(2^n) recursive blow-up that would otherwise
+    /// hit after a handful of captures. Historical checkpoints stay accessible
+    /// on the live quad — individual snapshots simply don't carry sub-history.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use epica_core::{BeliefNode, BeliefQuad, BeliefQuadCheckpoint, BeliefValue, Provenance};
+    ///
+    /// let mut quad = BeliefQuad::new();
+    /// quad.insert(BeliefNode::new(
+    ///     "k", BeliefValue::Asserted("v".into()),
+    ///     Provenance::UserStatement { turn: 0 }, 0.9,
+    /// ));
+    ///
+    /// let cp = BeliefQuadCheckpoint::capture(&quad);
+    /// assert_eq!(cp.version, quad.version());
+    /// assert_eq!(cp.quad.len(), 1);
+    /// ```
     pub fn capture(quad: &BeliefQuad) -> Self {
         let now_ms = SystemTime::now()
             .duration_since(UNIX_EPOCH)

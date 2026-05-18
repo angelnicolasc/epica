@@ -115,6 +115,22 @@ impl BeliefQuad {
     ///
     /// The node is registered in all four graphs immediately. Any edges connecting
     /// it to existing beliefs must be added separately via `add_*_edge()`.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use epica_core::{BeliefNode, BeliefQuad, BeliefValue, Provenance};
+    ///
+    /// let mut quad = BeliefQuad::new();
+    /// let id = quad.insert(BeliefNode::new(
+    ///     "intent",
+    ///     BeliefValue::Asserted("ship feature".into()),
+    ///     Provenance::UserStatement { turn: 0 },
+    ///     0.9,
+    /// ));
+    /// assert_eq!(quad.len(), 1);
+    /// assert_eq!(quad.get(id).unwrap().key, "intent");
+    /// ```
     pub fn insert(&mut self, mut node: BeliefNode) -> BeliefId {
         let id = self.nodes.insert_with_key(|k| {
             node.id = k;

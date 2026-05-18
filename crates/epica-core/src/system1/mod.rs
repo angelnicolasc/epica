@@ -27,6 +27,34 @@ impl BeliefQuad {
     ///
     /// Always runs synchronously. O(descendants) amortized.
     /// Never activates System 2 — that is the responsibility of `BeliefRuntime` (Phase 2).
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use epica_core::{BeliefNode, BeliefQuad, BeliefValue, CausalEdge, Provenance};
+    ///
+    /// let mut quad = BeliefQuad::new();
+    /// let premise = quad.insert(BeliefNode::new(
+    ///     "p", BeliefValue::Asserted("p".into()),
+    ///     Provenance::UserStatement { turn: 0 }, 0.8,
+    /// ));
+    /// let conclusion = quad.insert(BeliefNode::new(
+    ///     "c", BeliefValue::Asserted("c".into()),
+    ///     Provenance::UserStatement { turn: 0 }, 0.2,
+    /// ));
+    /// quad.add_causal_edge(
+    ///     premise, conclusion,
+    ///     CausalEdge::InferredFrom { premises: vec![premise] },
+    /// );
+    ///
+    /// // Propagating from the premise rewrites the conclusion's fast_confidence
+    /// // via the Noisy-OR rule (with temporal decay).
+    /// quad.propagate_system1(premise);
+    /// assert!(
+    ///     (quad.get(conclusion).unwrap().fast_confidence - 0.8).abs() < 1e-3,
+    ///     "conclusion now reflects its premise's confidence"
+    /// );
+    /// ```
     pub fn propagate_system1(&mut self, changed: BeliefId) {
         let mut visited = HashSet::new();
         self.propagate_system1_inner(changed, &mut visited);
