@@ -215,6 +215,7 @@ curl http://localhost:8765/v1/visualize/dot | dot -Tsvg > current.svg
 | [ROADMAP.md](ROADMAP.md) | Canonical roadmap — phase status, priorities, open items |
 | [BENCHMARKS.md](BENCHMARKS.md) | Performance numbers (Criterion) with reproducibility metadata |
 | [docs/fuzzing.md](docs/fuzzing.md) | libFuzzer targets — how to run and interpret |
+| [docs/observability.md](docs/observability.md) | Prometheus + OTLP setup, Jaeger docker-compose example |
 | [docs/phase_roadmap.md](docs/phase_roadmap.md) | Operational verification scripts per phase |
 | [docs/audit_guide.md](docs/audit_guide.md) | Claim → implementation → test mapping |
 

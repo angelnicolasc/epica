@@ -77,11 +77,12 @@ fn main() {
     let reflection_threshold: f32 = env_f32("EPICA_REFLECTION_THRESHOLD", 0.15);
 
     // ── Optional OTLP endpoint (OpenTelemetry trace export) ────────────────────
-    // If set, configure tracing-opentelemetry + opentelemetry-otlp in your process
-    // wrapper. The TraceLayer in server.rs emits tracing spans automatically.
-    if let Ok(otlp) = std::env::var("EPICA_OTLP_ENDPOINT") {
-        tracing::info!("OTLP endpoint configured: {otlp} (configure opentelemetry-otlp subscriber to export)");
-    }
+    // When the binary is built with `--features otlp`, init_otlp() reads
+    // EPICA_OTLP_ENDPOINT and attaches a tracing layer that forwards every
+    // span (including those emitted by tower-http's TraceLayer) to the
+    // collector over gRPC. Without the feature this is a no-op; setting
+    // EPICA_OTLP_ENDPOINT without the feature prints an informative warning.
+    epica_mcp::telemetry::init_otlp("epica-mcp");
 
     // ── Behavioral contract (optional, loaded from TOML) ───────────────────────
     // Set EPICA_CONTRACTS_FILE=/path/to/contract.toml to enable governance.

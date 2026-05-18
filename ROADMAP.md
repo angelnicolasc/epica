@@ -124,9 +124,6 @@ per-IP rate limiting, Prometheus metrics, Server Card.
 - ~~TD-P5-002 (TaskStore persistence)~~ — closed by commit `6bd9bf3`.
 
 **Open items:**
-- **P1** OpenTelemetry OTLP exporter. The `tracing` and Prometheus
-  pipelines are live; OTLP export is the only missing observability hop
-  for distributed tracing.
 - **P2** Health endpoint should report the live LLM-provider status
   (configured / missing-key / unreachable).
 
@@ -179,8 +176,12 @@ visible.
 - `tracing` everywhere, structured JSON via `tracing-subscriber`. ✅
 - Prometheus exporter (`/metrics`) with 7 belief / contract / System 2
   counters. ✅
-- **P1** OTLP exporter wired behind a feature flag (`otlp`), default off.
-  See Phase 5 above.
+- OpenTelemetry OTLP exporter behind the `otlp` feature: build with
+  `--features otlp` and set `EPICA_OTLP_ENDPOINT=http://collector:4317`
+  to stream spans (tower-http requests + belief handlers) to any
+  OTLP-compatible collector (Jaeger, OpenTelemetry Collector, Tempo,
+  Honeycomb). Misconfiguration is non-fatal — falls back to local
+  tracing only. See [docs/observability.md](../docs/observability.md). ✅
 
 ### Supply chain — current state
 

@@ -23,6 +23,10 @@ anthropic  = ["dep:epica-anthropic"]
 # Bundle the OpenAI LLM client into the epica-serve binary. Enables
 # `EPICA_LLM_PROVIDER=openai`.
 openai     = ["dep:epica-openai"]
+# Export OpenTelemetry traces over OTLP (gRPC). When enabled, set
+# `EPICA_OTLP_ENDPOINT=http://...` to a collector and tracing spans from
+# tower-http and the belief handlers stream through automatically.
+otlp       = ["dep:opentelemetry", "dep:opentelemetry-otlp", "dep:opentelemetry_sdk", "dep:tracing-opentelemetry"]
 
 [dependencies]
 epica-core.path      = "../epica-core"
@@ -49,6 +53,10 @@ hyper      = { workspace = true, optional = true }
 sled       = { version = "0.34", optional = true }
 epica-anthropic = { path = "../epica-anthropic", optional = true }
 epica-openai    = { path = "../epica-openai",    optional = true }
+opentelemetry        = { version = "0.24", optional = true }
+opentelemetry-otlp   = { version = "0.17", optional = true, features = ["grpc-tonic"] }
+opentelemetry_sdk    = { version = "0.24", optional = true, features = ["rt-tokio"] }
+tracing-opentelemetry = { version = "0.25", optional = true }
 
 [[bin]]
 name              = "epica-serve"
