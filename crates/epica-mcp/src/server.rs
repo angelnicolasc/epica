@@ -15,7 +15,6 @@ use axum::{
     routing::{get, post},
     Json, Router,
 };
-use tokio::sync::Mutex;
 use tower_http::trace::TraceLayer;
 
 use epica_runtime::BeliefRuntime;
@@ -32,7 +31,7 @@ use crate::{
     },
     middleware::{build_rate_limiter, cors_layer, rate_limit_middleware},
     server_card::McpServerCard,
-    tasks::TaskStore,
+    tasks::task_store_from_env,
     AppState,
 };
 
@@ -124,7 +123,7 @@ pub fn serve_blocking(
     rt.block_on(async {
         let state = Arc::new(AppState {
             runtime,
-            task_store: Mutex::new(TaskStore::default()),
+            task_store: task_store_from_env(),
             contract,
             auth,
             rate_limiter: build_rate_limiter(rps),

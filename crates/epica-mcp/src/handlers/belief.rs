@@ -98,7 +98,7 @@ pub async fn handle_belief_set(
 
                 let task_id = Uuid::new_v4();
                 let now_ms = now_ms();
-                state.task_store.lock().await.insert(McpTask {
+                let _ = state.task_store.insert(McpTask {
                     task_id,
                     belief_key: req.key.clone(),
                     status: TaskStatus::Completed {
@@ -131,7 +131,7 @@ pub async fn handle_belief_set(
                 }
 
                 let task_id = Uuid::new_v4();
-                state.task_store.lock().await.insert(McpTask {
+                let _ = state.task_store.insert(McpTask {
                     task_id,
                     belief_key: req.key.clone(),
                     status: TaskStatus::Pending,
@@ -142,7 +142,7 @@ pub async fn handle_belief_set(
 
                 let state_clone = Arc::clone(&state);
                 tokio::spawn(async move {
-                    state_clone.task_store.lock().await
+                    let _ = state_clone.task_store
                         .update_status(task_id, TaskStatus::Running);
 
                     if let Some(client) = state_clone.runtime.llm_client_arc() {
@@ -152,7 +152,7 @@ pub async fn handle_belief_set(
                                     .apply_system2_result(id, result.revised_confidence)
                                     .await;
                                 metrics::counter!(names::SYSTEM2_ACTIVATIONS).increment(1);
-                                state_clone.task_store.lock().await.update_status(
+                                let _ = state_clone.task_store.update_status(
                                     task_id,
                                     TaskStatus::Completed {
                                         result: serde_json::json!({
@@ -166,7 +166,7 @@ pub async fn handle_belief_set(
                                 // Refund the budget token — transient errors must not drain
                                 // the session budget.
                                 state_clone.runtime.release_system2_budget().await;
-                                state_clone.task_store.lock().await.update_status(
+                                let _ = state_clone.task_store.update_status(
                                     task_id,
                                     TaskStatus::Failed { error: e.to_string() },
                                 );
@@ -224,9 +224,10 @@ pub async fn handle_belief_set_result(
     State(state): State<Arc<AppState>>,
     Path(task_id): Path<Uuid>,
 ) -> Result<Json<serde_json::Value>, McpError> {
-    let store = state.task_store.lock().await;
-    let task = store
+    let task = state
+        .task_store
         .get(task_id)
+        .map_err(|e| McpError::Runtime(format!("task store error: {e}")))?
         .ok_or(McpError::TaskNotFound { task_id })?;
     Ok(Json(serde_json::json!({
         "task_id": task.task_id,

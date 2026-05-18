@@ -11,8 +11,12 @@ keywords             = ["mcp", "belief-revision", "llm-agents", "http-server", "
 categories           = ["web-programming::http-server", "asynchronous"]
 
 [features]
-default = ["server"]
-server  = ["dep:axum", "dep:tower", "dep:tower-http", "dep:hyper"]
+default    = ["server"]
+server     = ["dep:axum", "dep:tower", "dep:tower-http", "dep:hyper"]
+# Embedded persistent task store backed by sled. Enables SledTaskStore and the
+# `sled:` URI scheme in EPICA_TASKSTORE. Cost: ~1.5 MB compile-time, ~5 ms warm
+# startup to open the database.
+sled-store = ["dep:sled"]
 
 [dependencies]
 epica-core.path      = "../epica-core"
@@ -36,6 +40,7 @@ axum       = { workspace = true, optional = true }
 tower      = { workspace = true, optional = true }
 tower-http = { workspace = true, optional = true }
 hyper      = { workspace = true, optional = true }
+sled       = { version = "0.34", optional = true }
 
 [[bin]]
 name              = "epica-serve"

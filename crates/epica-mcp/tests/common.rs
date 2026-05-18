@@ -10,7 +10,6 @@ use axum::{
 use epica_core::BeliefQuad;
 use epica_mcp::{build_router, middleware::build_rate_limiter, AppState, AuthConfig};
 use epica_runtime::BeliefRuntime;
-use tokio::sync::Mutex;
 
 /// Build a test router with auth disabled and no Prometheus recorder.
 pub fn build_test_app() -> Router {
@@ -22,7 +21,7 @@ pub fn build_test_app() -> Router {
     ));
     let state = Arc::new(AppState {
         runtime,
-        task_store: Mutex::new(epica_mcp::tasks::TaskStore::default()),
+        task_store: Box::new(epica_mcp::tasks::InMemoryTaskStore::new()),
         contract: None,
         auth: AuthConfig::disabled(),
         rate_limiter: build_rate_limiter(100_000), // very high limit — tests don't hit it

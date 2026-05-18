@@ -4,7 +4,6 @@
 //! enterprise HTTP API with OAuth 2.1, SEP-1686 Tasks, Server Cards, and Prometheus.
 
 use std::sync::Arc;
-use tokio::sync::Mutex;
 
 pub mod auth;
 pub mod error;
@@ -24,8 +23,8 @@ pub use server_card::McpServerCard;
 pub struct AppState {
     /// The live belief runtime (BeliefQuad + System 1 + System 2 + contracts).
     pub runtime: Arc<epica_runtime::BeliefRuntime>,
-    /// SEP-1686 in-memory task store — System 2 call-now/fetch-later results.
-    pub task_store: Mutex<tasks::TaskStore>,
+    /// SEP-1686 task store (in-memory or sled-backed) — System 2 call-now/fetch-later results.
+    pub task_store: Box<dyn tasks::TaskStore>,
     /// Optional behavioral contract for the `/v1/contract/status` endpoint.
     pub contract: Option<epica_contracts::BehavioralContract>,
     /// OAuth 2.1 configuration — used by the auth middleware.

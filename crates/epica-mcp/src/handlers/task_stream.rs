@@ -36,10 +36,7 @@ pub async fn handle_task_stream(
 
             tokio::time::sleep(Duration::from_millis(100)).await;
 
-            let status = {
-                let store = state.task_store.lock().await;
-                store.get(id).map(|t| t.status.clone())
-            };
+            let status = state.task_store.get(id).ok().flatten().map(|t| t.status);
 
             let (event, next_done) = match status {
                 None => {
