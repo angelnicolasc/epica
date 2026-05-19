@@ -1,0 +1,37 @@
+[package]
+name        = "epica-zk-evidence"
+description = "Commitment-based audit receipts for Epica: Merkle inclusion proofs + ed25519 signatures, with skeleton for future ZK (RISC Zero) integration"
+version.workspace      = true
+edition.workspace      = true
+rust-version.workspace = true
+license.workspace      = true
+authors.workspace      = true
+repository.workspace   = true
+keywords             = ["audit", "merkle", "ed25519", "zero-knowledge", "epica"]
+categories           = ["cryptography", "command-line-utilities"]
+
+[features]
+default = []
+# Future: enables the RISC Zero zkVM backend. Currently a documented
+# skeleton — guest program lives elsewhere and requires the RISC-V
+# toolchain to build, which is out of scope for the host crate's CI.
+risc0   = []
+
+[dependencies]
+epica-contracts.path = "../epica-contracts"
+serde.workspace      = true
+serde_json.workspace = true
+thiserror.workspace  = true
+tracing.workspace    = true
+blake3.workspace     = true
+ed25519-dalek.workspace = true
+rand_core.workspace  = true
+hex.workspace        = true
+clap.workspace       = true
+
+[dev-dependencies]
+tempfile = "3.10"
+
+[[bin]]
+name = "epica-verify"
+path = "src/bin/verify.rs"
