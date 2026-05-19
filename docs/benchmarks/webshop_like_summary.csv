@@ -1,0 +1,2 @@
+suite,trajectories,total_steps,total_contradictions,tece_mean,calibration_met_pct,soft_violations,hard_violations,critical_violations,free_energy_mean,free_energy_samples,latency_samples,latency_mean_us,latency_p50_us,latency_p95_us,latency_p99_us,latency_max_us,wall_clock_seconds
+webshop_like,200,4280,165,0.65837,0.00,0,0,0,1.84856,2212,4280,61.56,37,182,253,951,0.3033

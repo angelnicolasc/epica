@@ -1,0 +1,40 @@
+[package]
+name        = "epica-benchmarks"
+description = "Workspace-internal benchmark harness for Epica: synthetic ALFWorld/WebShop traces, BeliefShift/T-ECE + free-energy + violations + latency reporting"
+version.workspace      = true
+edition.workspace      = true
+rust-version.workspace = true
+license.workspace      = true
+authors.workspace      = true
+repository.workspace   = true
+keywords             = ["benchmark", "belief-revision", "alfworld", "webshop", "epica"]
+categories           = ["science"]
+# Workspace-internal: not for crates.io.
+publish              = false
+
+[features]
+default          = ["active-inference"]
+# Enables the FEP monitor in the harness so free-energy metrics are reported.
+active-inference = [
+    "epica-runtime/active-inference",
+    "dep:epica-active-inference",
+]
+
+[dependencies]
+epica-core.path       = "../epica-core"
+epica-runtime.path    = "../epica-runtime"
+epica-contracts.path  = "../epica-contracts"
+epica-active-inference = { path = "../epica-active-inference", optional = true }
+tokio          = { workspace = true, features = ["rt-multi-thread", "sync", "macros", "time"] }
+serde.workspace       = true
+serde_json.workspace  = true
+thiserror.workspace   = true
+tracing.workspace     = true
+clap.workspace        = true
+
+[dev-dependencies]
+tempfile = "3.10"
+
+[[bin]]
+name = "epica-bench"
+path = "src/bin/bench.rs"
