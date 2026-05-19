@@ -8,9 +8,14 @@ pub mod audit;
 pub mod auth;
 pub mod cross_agent;
 pub mod forget;
+pub mod ledger;
 pub mod retention;
 
 pub use audit::{AuditDestination, AuditEntry, AuditEventType, AuditFormat, AuditMode, AuditPolicy};
+pub use ledger::{
+    new_shared_ledger, verify_merkle_proof, AuditLedger, LedgerEntry, LedgerTamperError,
+    SharedLedger,
+};
 pub use auth::{AllowedAgents, AuthPolicy};
 pub use cross_agent::{CrossAgentPolicy, SharingMode};
 pub use forget::{default_causal_verify_fn, ForgetPolicy, ForgetTrigger, ForgetVerificationResult};

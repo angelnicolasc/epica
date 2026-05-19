@@ -179,6 +179,7 @@ fn audit_policy_emit_tracing_does_not_panic() {
         mode: AuditMode::Full,
         destination: AuditDestination::Tracing,
         format: Default::default(),
+        ..Default::default()
     };
     let entry = AuditEntry::now(
         AuditEventType::ContractViolation,

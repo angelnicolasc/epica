@@ -19,6 +19,7 @@ tracing.workspace     = true
 uuid.workspace        = true
 async-trait.workspace = true
 tokio          = { workspace = true, features = ["sync", "macros"] }
+blake3.workspace      = true
 
 [dev-dependencies]
 proptest.workspace = true

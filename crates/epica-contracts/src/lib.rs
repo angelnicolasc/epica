@@ -42,9 +42,9 @@ pub use invariant::{ContractViolation, SessionInvariant, ViolationClass};
 pub use predicate::{BeliefExists, BeliefPredicate, MinConfidence};
 pub use recovery::RecoveryPolicy;
 pub use sovereignty::{
-    AuditDestination, AuditEntry, AuditEventType, AuditFormat, AuditMode, AuditPolicy,
-    AllowedAgents, AuthPolicy,
-    CrossAgentPolicy, SharingMode,
+    new_shared_ledger, verify_merkle_proof, AuditDestination, AuditEntry, AuditEventType,
+    AuditFormat, AuditLedger, AuditMode, AuditPolicy, AllowedAgents, AuthPolicy,
+    CrossAgentPolicy, LedgerEntry, LedgerTamperError, SharedLedger, SharingMode,
     default_causal_verify_fn, ForgetPolicy, ForgetTrigger, ForgetVerificationResult,
     MnemonicSovereignty, RecoveryVerificationResult, RecoveryVerifier,
     RetentionPolicy,

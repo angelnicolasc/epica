@@ -7,12 +7,25 @@
 use serde::{Deserialize, Serialize};
 use std::time::{SystemTime, UNIX_EPOCH};
 
+use super::ledger::{new_shared_ledger, AuditLedger, LedgerEntry, SharedLedger};
+
 /// How to record memory governance events.
 #[derive(Debug, Clone, Default)]
 pub struct AuditPolicy {
     pub mode: AuditMode,
     pub destination: AuditDestination,
     pub format: AuditFormat,
+    /// Optional tamper-evident hash chain over every emitted entry.
+    ///
+    /// `None` (the default) preserves the original emission semantics
+    /// — `emit` simply ships the entry to `destination` and forgets. When
+    /// `Some(ledger)`, every entry is also sealed into the [`AuditLedger`]
+    /// before being shipped; downstream verification (`verify_chain`,
+    /// `merkle_root`) becomes available.
+    ///
+    /// Set via [`Self::with_ledger`] or by directly assigning a shared
+    /// ledger you want to share across multiple `AuditPolicy` clones.
+    pub ledger: Option<SharedLedger>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -50,7 +63,7 @@ pub enum AuditFormat {
 /// A structured record emitted for every governance event.
 ///
 /// Compatible with enterprise observability pipelines (JSON Lines → OTEL collector).
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AuditEntry {
     pub timestamp_ms: u64,
     pub event_type: AuditEventType,
@@ -59,7 +72,7 @@ pub struct AuditEntry {
     pub details: serde_json::Value,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub enum AuditEventType {
     BeliefWrite,
     BeliefUpdate,
@@ -88,8 +101,44 @@ impl AuditEntry {
 // ── Emission ──────────────────────────────────────────────────────────────────
 
 impl AuditPolicy {
+    /// Enable the tamper-evident Merkle audit ledger with a fresh, empty
+    /// internal store. The returned policy owns an `Arc<Mutex<AuditLedger>>`
+    /// — clones share the same underlying chain, which matches how
+    /// `MnemonicSovereignty` clones flow through the runtime.
+    pub fn with_ledger(mut self) -> Self {
+        self.ledger = Some(new_shared_ledger());
+        self
+    }
+
+    /// Enable the ledger with a caller-supplied shared store. Useful when
+    /// the same ledger should accumulate entries from multiple policies
+    /// (e.g. write-auth + update-auth audited into one chain).
+    pub fn with_shared_ledger(mut self, ledger: SharedLedger) -> Self {
+        self.ledger = Some(ledger);
+        self
+    }
+
+    /// Return a handle to the underlying ledger, if one is attached. Used by
+    /// callers that need to call `verify_chain()` / `merkle_root()` outside
+    /// the emission hot path.
+    pub fn ledger_handle(&self) -> Option<SharedLedger> {
+        self.ledger.clone()
+    }
+
     /// Emit an audit entry according to the configured destination and format.
+    ///
+    /// When a [`SharedLedger`] is attached, the entry is sealed into the
+    /// chain *before* being dispatched — so a destination write that fails
+    /// (file I/O error, tracing back-pressure) still leaves the chain
+    /// intact. A poisoned ledger lock is treated as a hard error and
+    /// silently skips the append; the destination dispatch still happens,
+    /// matching the pre-existing best-effort semantics of `emit`.
     pub fn emit(&self, entry: &AuditEntry) {
+        if let Some(ledger) = &self.ledger {
+            if let Ok(mut l) = ledger.lock() {
+                let _sealed: LedgerEntry = l.append(entry.clone());
+            }
+        }
         match &self.destination {
             AuditDestination::Tracing => {
                 let json = serde_json::to_string(entry).unwrap_or_default();
