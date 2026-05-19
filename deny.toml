@@ -50,6 +50,28 @@ ignore = [
     # upgrades parking_lot or we replace the backend.
     # Tracked: ROADMAP.md → Phase 5 → ROADMAP-DEP-1.
     "RUSTSEC-2024-0384",
+
+    # RUSTSEC-2025-0012 — backoff 0.4.0 unmaintained. Transitive via
+    # neo4rs 0.8 → epica-memory (neo4j feature). Upstream neo4rs does not
+    # yet offer a maintained alternative; the maintainer recommends `backon`
+    # but neo4rs has not migrated. No action available without forking neo4rs.
+    # Tracked: ROADMAP.md → Supply chain → ROADMAP-DEP-2.
+    "RUSTSEC-2025-0012",
+
+    # RUSTSEC-2024-0436 — paste 1.0.15 unmaintained. Transitive via
+    # neo4rs 0.8 → epica-memory (neo4j feature). dtolnay has archived the
+    # crate; pastey is the suggested fork but neo4rs has not migrated.
+    # No action available without forking neo4rs.
+    # Tracked: ROADMAP.md → Supply chain → ROADMAP-DEP-2.
+    "RUSTSEC-2024-0436",
+
+    # RUSTSEC-2025-0134 — rustls-pemfile 2.2.0 unmaintained. Transitive via
+    # neo4rs 0.8 → rustls-native-certs 0.7.3 → epica-memory (neo4j feature).
+    # The replacement is rustls-pki-types ≥ 1.9.0 (PemObject trait), but
+    # rustls-native-certs 0.7.3 still pins to the old crate. Upstream fix
+    # requires neo4rs to bump rustls-native-certs to 0.8+.
+    # Tracked: ROADMAP.md → Supply chain → ROADMAP-DEP-2.
+    "RUSTSEC-2025-0134",
 ]
 
 # ── Licences ────────────────────────────────────────────────────────────────
@@ -71,7 +93,19 @@ allow = [
     "OpenSSL",
 ]
 confidence-threshold = 0.93
-exceptions = []
+
+# ── License exceptions ───────────────────────────────────────────────────────
+# Each exception documents which license we are explicitly accepting for a
+# specific package, and why it diverges from the main allow list.
+
+[[licenses.exceptions]]
+# r-efi publishes under MIT OR Apache-2.0 OR LGPL-2.1-or-later.
+# We use it under MIT (dual-licensed; no copyleft obligation arises).
+# Pulled in transitively: proptest 1.11 → rand 0.9 → rand_core 0.9
+#   → getrandom 0.3/0.4 → r-efi 5.3/6.0.
+# Tracked: ROADMAP.md → Supply chain → ROADMAP-DEP-3.
+allow = ["MIT", "Apache-2.0", "LGPL-2.1-or-later"]
+name = "r-efi"
 
 # ── Bans (duplicate versions, banned crates, wildcards) ─────────────────────
 [bans]
