@@ -14,6 +14,7 @@ categories.workspace = true
 default = []
 
 [dependencies]
+epica-core    = { path = "../epica-core" }
 epica-runtime = { path = "../epica-runtime", features = ["system2"] }
 reqwest       = { workspace = true }
 serde.workspace        = true
@@ -24,7 +25,6 @@ thiserror.workspace    = true
 tracing.workspace      = true
 
 [dev-dependencies]
-epica-core  = { path = "../epica-core" }
 tokio       = { workspace = true, features = ["test-util", "rt-multi-thread", "macros"] }
 wiremock    = { workspace = true }
 uuid.workspace = true

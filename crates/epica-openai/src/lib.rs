@@ -41,6 +41,10 @@
 
 pub mod client;
 pub mod config;
+pub mod embeddings;
 
 pub use client::OpenAiLlmClient;
 pub use config::{OpenAiConfig, OpenAiConfigError};
+pub use embeddings::{
+    OpenAiEmbeddingConfig, OpenAiEmbeddingError, OpenAiEmbeddingProvider,
+};
