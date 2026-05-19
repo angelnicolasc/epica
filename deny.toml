@@ -91,6 +91,11 @@ allow = [
     "CC0-1.0",
     "MPL-2.0",
     "OpenSSL",
+    # CDLA-Permissive-2.0 — Community Data License Agreement Permissive 2.0.
+    # Used by webpki-roots (Mozilla CA certificate bundle) pulled in via
+    # neo4rs 0.8 → epica-memory (neo4j feature). Permissive data license;
+    # no copyleft obligations.
+    "CDLA-Permissive-2.0",
 ]
 confidence-threshold = 0.93
 
