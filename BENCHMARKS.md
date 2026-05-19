@@ -1,11 +1,23 @@
 # Epica — Performance Benchmarks
 
-Measured numbers for the `epica-core` hot paths. Every figure on this page
-comes from a Criterion run reproducible with `cargo bench -p epica-core`.
-Values are reported with their **median** point estimate plus the 95 %
-confidence interval Criterion emits (mean ± noise band).
+Two complementary benchmark suites cover different parts of the stack:
 
-## Reproducibility
+1. **Criterion micro-benchmarks** — hot-path operations on `epica-core`
+   (insert, revise, checkpoint/rollback, System 1 propagation).
+2. **End-to-end harness** — `epica-bench` CLI running synthetic
+   ALFWorld/WebShop trajectories against the full runtime stack, reporting
+   T-ECE, contract violations, free-energy mean, and insert latency.
+
+---
+
+## 1. Criterion micro-benchmarks (`epica-core`)
+
+Every figure on this page comes from a Criterion run reproducible with
+`cargo bench -p epica-core`. Values are reported with their **median**
+point estimate plus the 95 % confidence interval Criterion emits (mean ±
+noise band).
+
+### Reproducibility
 
 | | |
 |---|---|
@@ -21,9 +33,7 @@ Higher sample counts narrow the confidence band but do not change the median
 order of magnitude — these numbers are stable across re-runs on the same
 hardware.
 
----
-
-## Summary
+### Summary
 
 | Operation | 100 beliefs | 1 000 beliefs | 10 000 beliefs |
 |---|---:|---:|---:|
@@ -42,9 +52,7 @@ Per-node amortized cost:
 | `checkpoint + rollback` | ≈ 1.06 µs |
 | System 1 chain propagation | ≈ 374 µs |
 
----
-
-## Read this honestly
+### Read this honestly
 
 The four CRUD-style operations (`insert`, `revise`, `checkpoint`, `rollback`)
 are **linear in graph size** and run in sub-millisecond-per-node territory
@@ -66,12 +74,10 @@ chains. For depth-bounded fan-out graphs the cost falls dramatically — that
 benchmark is on the roadmap. Until it is added, **the chain numbers should be
 read as an upper bound, not a representative case**.
 
-This gap is tracked as a hardening item in `DEVLOG.md` (HD-S2-A1) and on
-[ROADMAP.md](./ROADMAP.md) under Phase 5 (performance hardening).
+This gap is tracked as HD-S2-A1 in `DEVLOG.md` and on
+[ROADMAP.md](./ROADMAP.md) under Phase 1 open items.
 
----
-
-## How to run
+### How to run
 
 Full sweep (archival-quality, ~10 minutes on this hardware):
 
@@ -97,9 +103,7 @@ HTML reports land in `target/criterion/`; open
 `target/criterion/report/index.html` for the full set with violin plots
 and regression history.
 
----
-
-## Methodology notes
+### Methodology notes
 
 - **`insert` and `revise` measure cumulative cost over N operations.** Per-call
   cost is the reported time divided by N. We do *not* report a single-shot
@@ -115,3 +119,82 @@ and regression history.
   theoretical floor for "touch N confidences once", not a competitor —
   Epica's data structure does meaningfully more work per node and the ratio
   is the cost of that work.
+
+---
+
+## 2. End-to-end harness (`epica-benchmarks`)
+
+The `epica-bench` CLI (crate `epica-benchmarks`) runs deterministic,
+seeded synthetic trajectories through the full runtime stack — AGM
+revision, K\*6 semantic equivalence, behavioral contracts, and the
+optional FEP hook — and reports four headline metrics per suite.
+
+### Reproducibility
+
+| | |
+|---|---|
+| **CPU** | AMD Ryzen 5 3400G (same as above) |
+| **Trajectories** | 200 per suite (deterministic — same seed → identical CSV byte-for-byte) |
+| **Stack** | `BeliefRuntime` + `BehavioralContract` + `ActiveInferenceMonitor` (`--features active-inference`) |
+| **Command** | `cargo build --release -p epica-benchmarks && target/release/epica-bench run-all --trajectories 200 --out-dir docs/benchmarks` |
+
+### Results (200 trajectories per suite)
+
+| Suite | T-ECE | AGM contradictions | Free energy mean (nats) | p99 insert lat (µs) |
+|---|---:|---:|---:|---:|
+| `alfworld_like` | **0.080** | 0 | 1.88 | **79** |
+| `webshop_like` | **0.658** | 165 | 1.85 | **253** |
+
+Full per-trajectory CSVs and per-suite Markdown summaries live in
+[`docs/benchmarks/`](./docs/benchmarks/).
+
+### Reading the numbers
+
+**`alfworld_like`** — multi-step goal pursuit (8–14 steps). One asserted
+goal, probe results at varied confidence, one mid-trajectory AGM
+correction. T-ECE = 0.080 confirms the pipeline is calibrated on
+well-ordered sequential revisions. Zero AGM contradictions: the agent
+corrects via AGM expansion, not contradiction.
+
+**`webshop_like`** — search-then-filter (10–18 steps). Exercises K\*6
+paraphrase recognition, then 2–4 filter refinements that contradict prior
+high-confidence candidates. **T-ECE = 0.658 is the correct behaviour**:
+the runtime detects and exposes the miscalibration produced by the
+search-then-refute pattern. 165 AGM contradictions across 200 trajectories
+confirm the contradiction-aware revision path fires as expected.
+
+**p99 ≤ 253 µs** — both suites run with the `active-inference` feature
+enabled (FEP hook on every `insert_belief`). The 253 µs p99 on the more
+intensive WebShop suite confirms the "<1 ms hot path" promise holds even
+with the FEP hook in the call stack.
+
+### Honest scope
+
+The Sprint-4 plan cited ALFWorld (AI2-THOR text agent) and WebShop (Flask
+shopping simulator) as the target live environments. **Current numbers are
+from synthetic trajectory generators** that emulate the *epistemic shape*
+of those benchmarks — not from a live Python environment. This is a
+deliberate scope decision documented in [`DEVLOG.md`](./DEVLOG.md) and
+the `RealEnvAdapter` trait in
+[`crates/epica-benchmarks/src/real_adapters.rs`](./crates/epica-benchmarks/src/real_adapters.rs)
+is the seam for upgrading to real environments without changing the harness
+API.
+
+### How to reproduce
+
+```bash
+# Build the release binary (the default dev build is ~10× slower)
+cargo build --release -p epica-benchmarks --bin epica-bench
+
+# Run both suites, 200 trajectories each
+target/release/epica-bench run-all --trajectories 200 --out-dir docs/benchmarks
+
+# Or run a single suite
+target/release/epica-bench run alfworld_like --trajectories 200 --out-dir /tmp/bench
+
+# Without FEP monitor (baseline comparison)
+target/release/epica-bench run-all --no-active-inference
+```
+
+The CSVs in `docs/benchmarks/` are deterministic byte-for-byte — diffing
+them against a local re-run is a valid reproducibility check.

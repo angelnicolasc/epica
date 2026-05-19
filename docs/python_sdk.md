@@ -15,7 +15,7 @@ Most agent memory systems are retrieval pipelines: store, embed, retrieve. Epica
 `epica` exposes this runtime to Python via a PyO3 extension module. The Rust core gives you:
 
 - **BeliefQuad** - four-graph belief store (semantic, temporal, causal, entity) with AGM K*2-K*6 compliance
-- **BeliefRuntime** - dual-process System 1 (synchronous Noisy-OR) + System 2 (synchronous LLM reflection from Rust side) with Trajectory-ECE session reporting
+- **BeliefRuntime** - dual-process System 1 (synchronous Noisy-OR) + System 2 (async non-blocking LLM reflection; injectable from Python via `PyLlmClientHandle`) with Trajectory-ECE session reporting
 - **BehavioralContract** - typed `C=(P,I,G,R)` contract enforcement (arXiv:2602.22302)
 - **Thread-safe** - internally `Arc<RwLock<>>` / `Arc<Mutex<>>` - safe for GIL-free Python 3.13+
 - **Typed** - PEP 561 package with hand-crafted `.pyi` stubs for mypy/pyright
@@ -90,7 +90,7 @@ Four-graph belief store. All methods are thread-safe.
 
 ### `BeliefRuntime`
 
-Dual-process runtime. System 2 fires synchronously on the Rust side; no Python-level async bridge yet ([TD-P6-001](phase_roadmap.md#open-technical-debts)). Implements the context manager protocol.
+Dual-process runtime. System 2 is async and non-blocking; inject a `LlmClient` from Python via `attach_llm_client(MockLlmClient(...).handle())` or `attach_llm_client(handle)`. No Python-level `await` bridge yet ([TD-P6-001](phase_roadmap.md#open-technical-debts)) — poll via `GET /v1/tasks/:id` for results. Implements the context manager protocol.
 
 | Method | Signature | Returns | Raises |
 |--------|-----------|---------|--------|

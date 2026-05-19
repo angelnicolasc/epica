@@ -86,7 +86,7 @@ Every call to `update_belief()` evaluates write authorization, audit logging, an
 
 - Cross-agent policy enforcement requires the MCP server to act as a trust boundary. Agents communicating outside the MCP layer bypass this enforcement.
 - `AuditPolicy::SelectiveMode` logs only beliefs matching a user-supplied predicate. Gaps in the predicate create audit gaps.
-- In-memory `TaskStore` in `epica-mcp` means audit logs for async System 2 tasks are lost on server restart ([TD-P5-002](phase_roadmap.md#open-technical-debts)).
+- `AuditLedger` is in-memory only; the Merkle chain does not survive process restarts. `SledTaskStore` covers MCP task durability (TD-P5-002 closed) but not ledger persistence (TD-P9-001).
 - `PostulateAudit` (AGM audit trail) is separate from the sovereignty audit trail; they are not correlated in the current implementation.
 
 ---

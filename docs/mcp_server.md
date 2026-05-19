@@ -12,9 +12,8 @@ The server is a full Axum-based MCP 2026 implementation with 16 routes. All hand
 
 ## What is still approximate or planned
 
-- SEP-1686 Tasks appear immediately as `Completed` because System 2 is synchronous. The call-now / fetch-later pattern is structurally correct but the "pending" state is never observed in current tests (TD-P5-002).
-- The in-memory `TaskStore` loses tasks on server restart (TD-P5-002).
 - OAuth 2.1 uses HS256 by default; RS256 is available via `EPICA_JWT_ALG=rs256` with JWKS rotation.
+- Health endpoint does not report live LLM-provider status (configured / missing-key / unreachable) — cosmetic P2 gap.
 
 ---
 
@@ -82,7 +81,7 @@ System 2 (LLM reflection) is natively async. `POST /v1/beliefs` and `PATCH /v1/b
 
 The caller polls `GET /v1/tasks/:id` for the `slow_confidence` result, or subscribes to `GET /v1/tasks/:id/stream` for SSE push.
 
-**Current behavior**: System 2 executes synchronously. The task is created and immediately marked `Completed` in the same request. The polling endpoint returns the result without waiting. This is semantically correct - the client does not observe broken behavior - but the "pending" -> "completed" lifecycle is not exercised under real async load today (TD-P5-002).
+System 2 is non-blocking. `update_belief()` returns `System2Pending { task_id }` without waiting for the LLM; the background task updates `slow_confidence` and transitions the task from `Pending` to `Completed`. Tasks are durable — `SledTaskStore` (feature `sled-store`) survives server restarts. The `Pending → Completed` lifecycle is exercised in `tests/e2e_tasks.rs`.
 
 ---
 
@@ -119,7 +118,6 @@ Paths exempt from auth: `/health`, `/ready`, `/metrics`, `/.well-known/*`.
 
 ## Known limitations
 
-- Task store is in-memory; tasks lost on restart ([TD-P5-002](phase_roadmap.md#open-technical-debts))
-- System 2 is synchronous; "pending" task state not observable in current tests ([TD-P5-002](phase_roadmap.md#open-technical-debts))
-- `EPICA_CONTRACTS_FILE` TOML loading resolved (TD-P5-001 - `ContractConfig` implemented)
-- No retry or circuit-breaker on System 2 LLM calls
+- `EPICA_CONTRACTS_FILE` TOML loading is resolved — `ContractConfig` is fully implemented (TD-P5-001 closed)
+- No retry or circuit-breaker on System 2 LLM calls from the MCP layer (epica-anthropic has its own 3-attempt exponential backoff, but the MCP handler doesn't surface transient failures distinctly)
+- Health endpoint does not report LLM-provider reachability status

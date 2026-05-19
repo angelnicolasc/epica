@@ -8,17 +8,21 @@ An honest comparison of Epica against alternatives in the memory and agent safet
 
 | Feature | Vector store (e.g., Pinecone, Weaviate) | Graph memory (e.g., Zep, MemGPT) | LangGraph memory | Output guardrails (e.g., Guardrails.ai, AgentAssert) | Epica |
 |---------|:------:|:------:|:------:|:------:|:------:|
-| **Belief revision on contradiction** | No | No | No | No | AGM K\*2-K\*5 |
+| **Belief revision on contradiction** | No | No | No | No | AGM K\*2–K\*6 (hard errors) |
+| **Semantic-equivalence K\*6** | No | No | No | No | Embedding-aware; paraphrases recognised on hot path |
 | **Causal confidence propagation** | No | Partial (graph traversal) | No | No | Noisy-OR over CausalGraph |
-| **Formal revision postulates** | No | No | No | No | K\*2-K\*5 verified; K\*6 approximate |
+| **Continuous Bayesian-surprise audit** | No | No | No | No | Friston FEP monitor (opt-in) |
+| **Formal revision postulates** | No | No | No | No | K\*2–K\*6 verified |
 | **Typed contracts on belief writes** | No | No | No | Output-level only | `C = (P, I, G, R)` before agent acts |
 | **Memory governance (write/read/forget policy)** | No | Partial | No | No | 9 primitives (arXiv:2604.16548) |
 | **Forget-policy verification** | No | No | No | No | Exhaustive graph traversal |
+| **Tamper-evident audit ledger** | No | No | No | No | BLAKE3 Merkle chain + Ed25519 receipts |
+| **Offline third-party verifiability** | No | No | No | No | `epica-verify` CLI |
 | **Rollback with formal guard** | No | No | No | No | K\*4 vacuity enforced |
 | **MCP 2026 native** | No | No | No | No | 16 routes + SEP-1686 Tasks |
 | **Rust library (embeddable)** | No (service) | No (service) | No (Python framework) | No (Python) | Yes |
-| **Python bindings** | Native | Native | Native | Native | PyO3 - System 1 complete; System 2 not exposed (TD-P7-002); no async bridge (TD-P6-001) |
-| **Paper-grounded** | No | Partial | No | Partial | 5 arXiv papers (2026) |
+| **Python bindings** | Native | Native | Native | Native | PyO3 — full API including `LlmClient` injection; no native async bridge (TD-P6-001) |
+| **Paper-grounded** | No | Partial | No | Partial | 5 arXiv papers (2026) + Friston FEP |
 | **Implementation maturity** | Production | Production | Production | Production | Production-oriented (2026) |
 
 ---
@@ -87,7 +91,7 @@ Where Epica is **weaker**:
 - Retrieval at scale: vector stores are significantly more mature for high-volume semantic search.
 - Long-term persistence: graph memory systems have more mature cross-session storage.
 - Ecosystem integration: LangGraph and Guardrails have deeper framework integrations today.
-- Semantic equivalence: Epica's K\*6 approximation means paraphrased contradictions may not be caught.
+- Embedding cache: the `CachedEmbeddingProvider` is unbounded in-memory; long-running agents will see memory growth without eviction (TD-P8-002).
 
 Where Epica is **different** (not just stronger):
 - It is an embeddable Rust library, not a hosted service.

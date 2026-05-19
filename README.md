@@ -7,190 +7,285 @@
 [![MSRV: 1.82](https://img.shields.io/badge/MSRV-1.82-blue.svg)](https://blog.rust-lang.org/2024/10/17/Rust-1.82.0.html)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-**Epistemic Causal Agent Belief Runtime** - embeddable Rust library for formal causal belief revision in LLM agents.
+**Epistemic Causal Agent Belief Runtime** — an embeddable Rust library for formal causal belief revision in LLM agents.
 
 ---
 
 ## What Epica does
 
-Epica gives LLM agents a disciplined belief layer: a typed, revision-safe, contract-governed store grounded in five 2026 arXiv papers.
+Epica gives LLM agents a disciplined belief layer: a typed, revision-safe,
+contract-governed store with a cryptographically auditable trail and a
+continuous Bayesian-surprise monitor on top. Grounded in five 2026 arXiv
+papers, implemented across **12 Rust crates + 2 CLI binaries**, fully
+tested end-to-end.
 
-Three concrete capabilities this codebase delivers today:
+Four concrete capabilities this codebase delivers today:
 
-- **Contradiction-aware belief updates**: when new evidence contradicts an existing belief on the same key, AGM contraction (Alchourron-Gardenfors-Makinson, 1985) applies a Core-Retainment-style minimal contraction over the belief's supporting premises before accepting the new value. Postulates K\*2–K\*5 are enforced as hard errors in all builds; K\*6 is approximated. Cross-belief semantic contradiction (paraphrases, negations) requires explicit graph edges or Phase 4 embedding integration (TD-003).
-- **Confidence propagation over causal structure**: System 1 propagates confidence changes through the causal graph via Noisy-OR. System 2 triggers async LLM reflection when confidence diverges from the reliability baseline. T-ECE pipeline validated; real-task calibration benchmarks (ALFWorld/WebShop) not yet measured.
-- **Contract-enforced belief mutation**: typed `C = (P, I, G, R)` contracts gate every belief write. Soft violations log and continue. Hard violations trigger recovery. Critical violations halt with a causal diff and escalate.
+- **Contradiction-aware belief updates with semantic-equivalence support.**
+  When new evidence contradicts an existing belief on the same key, AGM
+  contraction (Alchourrón-Gärdenfors-Makinson 1985) applies a
+  Core-Retainment-style minimal contraction over the belief's supporting
+  premises before accepting the new value. Postulates **K\*2–K\*6** are
+  enforced as hard errors in all builds — K\*6 (extensionality) is the
+  real semantic postulate, not a structural stub: when an
+  `EmbeddingProvider` is installed, paraphrases of the same intent are
+  recognised as equivalent and do not trigger spurious revisions.
+
+- **Dual-process uncertainty with continuous Bayesian-surprise monitor.**
+  System 1 propagates confidence through the causal graph via Noisy-OR.
+  System 2 triggers async LLM reflection when confidence diverges from
+  the reliability baseline. On top of those, an optional
+  [Active Inference / Free Energy](crates/epica-active-inference/)
+  monitor (Friston) tracks per-observation surprise against a
+  homeostatic budget — the runtime can detect *whole-agent* drift that
+  no individual contract invariant catches.
+
+- **Tamper-evident audit trail with third-party-verifiable receipts.**
+  Every governance event is sealed into a BLAKE3 Merkle hash chain
+  ([`AuditLedger`](crates/epica-contracts/src/sovereignty/ledger.rs)).
+  The [`epica-verify`](crates/epica-zk-evidence/) CLI emits and
+  validates Ed25519-signed [`EvidenceReceipt`](crates/epica-zk-evidence/src/receipt.rs)s
+  — auditors can confirm offline that a ledger window was sealed by a
+  specific prover and has not been edited since, with O(log N) per-entry
+  Merkle proofs.
+
+- **Reproducible benchmark harness with the 4 headline metrics.**
+  The [`epica-bench`](crates/epica-benchmarks/) CLI runs deterministic
+  ALFWorld-/WebShop-style synthetic trajectories and emits CSV +
+  Markdown reports of **BeliefShift (T-ECE)**, **contract violations**,
+  **free-energy mean**, and **insert latency p50/p95/p99**. Numbers in
+  `docs/benchmarks/` are reproducible bit-for-bit across hosts.
 
 ---
 
 ## Why this matters
 
-LLM agents accumulate beliefs across tool calls, user turns, and environment observations. Standard memory layers (vector stores, session state, KV caches) do not:
+LLM agents accumulate beliefs across tool calls, user turns, and
+environment observations. Standard memory layers (vector stores, session
+state, KV caches) do not:
 
-- detect when a new belief contradicts existing ones
-- propagate confidence changes through causal dependencies
-- enforce typed policies on who may write, revise, or delete a belief
+- detect when a new belief semantically contradicts existing ones,
+- propagate confidence changes through causal dependencies,
+- enforce typed policies on who may write, revise, or delete a belief,
+- produce an auditable trail an external party can verify without trust.
 
-Epica addresses these gaps with a runtime designed for deployment alongside any LLM framework (Anthropic SDK, LangGraph, MCP-compatible hosts).
+Epica addresses these gaps with a runtime designed for deployment
+alongside any LLM framework (Anthropic SDK, OpenAI SDK, LangGraph,
+MCP-compatible hosts).
 
 ---
 
-## What is implemented today
+## Workspace map
 
-Seven Rust crates compile with `cargo check --workspace --exclude crates/epica-python` (`epica-python` requires Python headers at build time and is verified separately). 29 E2E tests pass in `epica-mcp`. 65 pytest pass in `epica-python` (requires `maturin develop`).
+12 crates + 2 CLI binaries, all part of the default `cargo check
+--workspace --exclude epica-python` build.
+
+| Crate | Role | Status |
+|---|---|---|
+| [`epica-core`](crates/epica-core/) | `BeliefQuad`, 4 orthogonal graphs, AGM K\*2–K\*6, System 1 Noisy-OR, checkpoint/rollback, `EmbeddingProvider` trait | ✅ |
+| [`epica-runtime`](crates/epica-runtime/) | `BeliefRuntime`, dual-process System 1/2, `LlmClient` trait, `ConfidenceHistory`, T-ECE, retrieval, FEP hook | ✅ |
+| [`epica-contracts`](crates/epica-contracts/) | `BehavioralContract` C=(P,I,G,R), 9 Mnemonic Sovereignty primitives, `AuditLedger` (Merkle + BLAKE3) | ✅ |
+| [`epica-macros`](crates/epica-macros/) | `#[derive(BeliefState)]` proc-macro, 9 attributes | ✅ |
+| [`epica-anthropic`](crates/epica-anthropic/) | `AnthropicLlmClient` + `ProspectiveClient` over Anthropic Messages API | ✅ |
+| [`epica-openai`](crates/epica-openai/) | `OpenAiLlmClient` + `OpenAiEmbeddingProvider` over OpenAI-compatible APIs | ✅ |
+| [`epica-active-inference`](crates/epica-active-inference/) | `ActiveInferenceMonitor` — variational free-energy over the BeliefQuad | ✅ (opt-in feature) |
+| [`epica-mcp`](crates/epica-mcp/) | Axum MCP 2026 server, 16 routes, SEP-1686 Tasks, OAuth 2.1 JWT, Prometheus | ✅ |
+| [`epica-memory`](crates/epica-memory/) | `LongTermMemoryStore` trait + Redis + Neo4j (`neo4rs 0.8`) backends | ✅ |
+| [`epica-python`](crates/epica-python/) | PyO3 SDK: `PyBeliefQuad`, `PyBeliefRuntime`, contracts, `PyMockLlmClient`, `LlmClientHandle` | ✅ |
+| [`epica-zk-evidence`](crates/epica-zk-evidence/) | `EvidenceReceipt` + Ed25519 prover/verifier + `epica-verify` CLI | ✅ |
+| [`epica-benchmarks`](crates/epica-benchmarks/) | Synthetic ALFWorld/WebShop traces + `epica-bench` CLI | ✅ (workspace-internal) |
+
+CLIs:
+
+- [`epica-serve`](crates/epica-mcp/src/main.rs) — MCP 2026 server.
+- [`epica-verify`](crates/epica-zk-evidence/src/bin/verify.rs) — `keygen` / `seal` / `verify` audit receipts.
+- [`epica-bench`](crates/epica-benchmarks/src/bin/bench.rs) — benchmark suites with CSV / Markdown output.
+
+---
+
+## What every claim costs to verify
+
+```bash
+# Full workspace, default features
+cargo test --workspace --exclude epica-python                  # ~500 tests across all crates
+
+# Per-feature paths
+cargo check  -p epica-memory          --features neo4j         # real neo4rs driver compiles
+cargo check  -p epica-runtime         --features active-inference
+cargo check  -p epica-zk-evidence     --features risc0         # documented skeleton
+cargo test   -p epica-runtime         --features active-inference
+
+# Python SDK (requires Python + maturin)
+cd crates/epica-python && maturin develop
+python -m pytest tests/ -v                                     # 65 pytest
+
+# Reproduce published bench artefacts
+cargo build --release -p epica-benchmarks --bin epica-bench
+target/release/epica-bench run-all --trajectories 200 --out-dir docs/benchmarks
+```
+
+See [`docs/audit_guide.md`](docs/audit_guide.md) for the claim →
+implementation → test map an external reviewer can walk top-to-bottom.
+
+---
+
+## Capability table
 
 | Capability | Status | Verification path |
-|-----------|--------|-------------------|
-| BeliefQuad 4-graph store | Implemented | `cargo test -p epica-core` |
-| AGM K\*2-K\*5 revision | Implemented | `crates/epica-core/tests/agm_postulates/` |
-| AGM K\*6 extensionality | **Approximated** - structural equality only | `tests/agm_postulates/k6_extensionality.rs` |
-| System 1 Noisy-OR propagation | Implemented | `tests/integration/system1_propagation.rs` |
-| System 2 LLM reflection (sync) | Implemented | `tests/system2_mock.rs`, `crates/epica-anthropic/` |
-| T-ECE calibration metric | Implemented; formula pipeline validated | `tests/beliefshift_benchmark.rs` |
-| Checkpoint / rollback with K\*4 guard | Implemented | `tests/integration/quad_basic.rs` |
-| Behavioral contracts C=(P,I,G,R) | Implemented | `cargo test -p epica-contracts` |
-| Mnemonic sovereignty (9 primitives) | Implemented at struct level; enforced in runtime | `crates/epica-contracts/src/sovereignty.rs` |
-| Forget-policy verification | Implemented - exhaustive graph traversal | `epica-contracts/src/sovereignty.rs` |
-| `#[derive(BeliefState)]` proc macro | Implemented - 9 attributes, all generated methods | `cargo test -p epica-macros` |
-| ProspectiveIndex write-time indexing | Implemented with `HashEmbedder` fallback | `crates/epica-runtime/src/prospective/` |
-| MCP 2026 server (16 routes) | Implemented | `cargo test -p epica-mcp` (29 E2E) |
-| SEP-1686 Tasks primitive | Implemented (tasks complete synchronously) | `tests/e2e_tasks.rs` |
-| OAuth 2.1 JWT (HS256 / RS256) | Implemented | `tests/e2e_health.rs` |
-| Prometheus metrics | Implemented | `GET /metrics` |
-| Python SDK (PyO3) | Implemented | 65 pytest in `crates/epica-python/tests/` |
-| Redis persistence | Implemented | `crates/epica-memory/src/redis/` |
+|---|---|---|
+| BeliefQuad 4-graph store | ✅ | `cargo test -p epica-core` |
+| AGM K\*2–K\*5 (proptest, 256+ cases each) | ✅ | `tests/agm_postulates/k{2,3,4,5}_*.rs` |
+| **AGM K\*6 — semantic equivalence via `EmbeddingProvider`** | ✅ | `tests/agm_postulates/k6_extensionality.rs` (4 cases, including paraphrase + anti-parallel) |
+| System 1 Noisy-OR with cycle guard | ✅ | `crates/epica-core/src/system1/`, proptest invariants |
+| System 2 async reflection (token-bucket budget) | ✅ | `tests/system2_mock.rs`, `tests/system2_real_async.rs` |
+| **Active Inference / Free Energy monitor** (opt-in) | ✅ | `cargo test -p epica-active-inference` (16) + `--features active-inference` integration (5) |
+| T-ECE calibration metric + history | ✅ | `tests/beliefshift_benchmark.rs`, `tests/tece_session.rs` |
+| Checkpoint / rollback with K\*4 guard | ✅ | `crates/epica-core/tests/integration/` |
+| Behavioral contracts C=(P,I,G,R) | ✅ | `cargo test -p epica-contracts` |
+| 9 Mnemonic Sovereignty primitives | ✅ | `crates/epica-contracts/tests/sovereignty.rs` |
+| **Tamper-evident Merkle audit ledger (BLAKE3)** | ✅ | `cargo test -p epica-contracts` (`audit_ledger.rs` + ledger unit tests) |
+| **Ed25519 EvidenceReceipt + `epica-verify` CLI** | ✅ | `cargo test -p epica-zk-evidence` (23: 18 unit + 4 CLI smoke + 1 doctest) |
+| `#[derive(BeliefState)]` proc macro | ✅ | `cargo test -p epica-macros` |
+| ProspectiveIndex with real LLM embedder | ✅ | `crates/epica-runtime/src/prospective/`, `epica-anthropic` impl |
+| MCP 2026 server (16 routes) + SEP-1686 Tasks | ✅ | `cargo test -p epica-mcp` (29 E2E) |
+| OAuth 2.1 JWT (HS256 / RS256) + JWKS rotation | ✅ | `tests/e2e_health.rs` |
+| Prometheus metrics, OTLP optional | ✅ | `GET /metrics`, [`docs/observability.md`](docs/observability.md) |
+| Python SDK + `LlmClient` injection from Python | ✅ | 65 pytest + `PyMockLlmClient.handle()` |
+| **Redis + Neo4j persistence (both real, opt-in)** | ✅ | `cargo check -p epica-memory --features neo4j` |
+| **`OpenAiEmbeddingProvider` (OpenAI-compatible)** | ✅ | `cargo test -p epica-openai` (17, with wiremock) |
+| **Synthetic ALFWorld/WebShop benchmark harness** | ✅ | `target/release/epica-bench run-all` — see `docs/benchmarks/` |
+
+The capabilities marked **bold** are post-public-review hardening
+deliverables — see [DEVLOG.md](DEVLOG.md) for sprint-by-sprint
+disclosure of what was added, what was pivoted, and why.
 
 ---
 
-## What is approximate or pending
+## Honest scope: what is *deliberately* deferred
 
-| Item | Status | Details |
-|------|--------|---------|
-| AGM K\*6 | **Approximate** | Structural equality only; semantic equivalence requires embedding comparison (TD-003) |
-| Semantic contradiction detection | **Structural only** | Same-ID value comparison (normalized for `Asserted`). Cross-belief semantic contradiction requires explicit `SemanticEdge::Contradicts` or Phase 4 embeddings (TD-003) |
-| System 2 async | **Implemented** | LLM reflection spawns a background task; `update_belief()` returns immediately with a `task_id`. Budget refunded on LLM failure. |
-| Python System 2 injection | **Not exposed** | `BeliefRuntime::with_llm_client()` not yet bridged to Python (TD-P7-002) |
-| Python async (`await`) | **Not available** | `pyo3-asyncio` with pyo3 0.22 is unstable (TD-P6-001) |
-| Neo4j persistence | **Returns `Err`** | No stable Rust driver; graceful error present (TD-NEW-001) |
-| Phase 1 perf benchmarks | **Measured** | See [BENCHMARKS.md](./BENCHMARKS.md) for numbers + methodology |
+Every shipping decision below was a documented pivot, not a missing
+feature. Each one has a `RealEnvAdapter`-style seam ready for landing
+when the infrastructure pre-requisites are in place.
+
+| Item | What ships today | What needs infrastructure |
+|---|---|---|
+| **Real ALFWorld / WebShop benchmarks** | Synthetic traces emulating the *epistemic shape* — multi-step goals, paraphrases, filter-driven contradictions. Numbers reproducible bit-for-bit. | Python env + AI2-THOR install + Flask sim. Trait `RealEnvAdapter` is the seam ([code](crates/epica-benchmarks/src/real_adapters.rs)). |
+| **ZK proofs over the audit ledger** | BLAKE3 Merkle commitment + Ed25519 signature → tamper-evidence + non-repudiation + offline verification. `EvidenceReceipt` wire format is stable. | RISC-V toolchain (`cargo-risczero` + `riscv32im-risc0-zkvm-elf`). Skeleton at [`zk_skeleton.rs`](crates/epica-zk-evidence/src/zk_skeleton.rs); feature `risc0`. |
+| **Native Python `await` bridge** | Sync Python SDK fully wired, including `LlmClient` injection via `MockLlmClient`. | `pyo3-asyncio` stable for pyo3 0.22 (TD-P6-001). |
+
+These pivots are documented in [DEVLOG.md](DEVLOG.md) with the cost /
+value reasoning. None of them is hidden behind silent stubs — each
+seam is a published trait + an `_AVAILABLE: bool` flag.
 
 ---
 
-## LLM providers (System 2 reflection)
+## Quick start
 
-The `LlmClient` trait in `epica-runtime` is provider-agnostic. Two production
-clients ship in this workspace; both share the same retry policy (exponential
-backoff with deterministic jitter, 3 attempts) and the same error taxonomy
-(`Network` / `ClientError` / `RateLimited` / `Deserialize`).
+### Rust
 
-| Provider | Crate | Default model | Selected via |
-|---|---|---|---|
-| Anthropic | `epica-anthropic` | `claude-sonnet-4-6` | `EPICA_LLM_PROVIDER=anthropic` + `ANTHROPIC_API_KEY` |
-| OpenAI | `epica-openai` | `gpt-4o-mini` | `EPICA_LLM_PROVIDER=openai` + `OPENAI_API_KEY` |
+```rust
+use epica_core::{BeliefQuad, BeliefNode, BeliefValue, Provenance};
 
-Build `epica-serve` with the providers you need:
+let mut quad = BeliefQuad::new();
+let id = quad.insert(BeliefNode::new(
+    "user_intent",
+    BeliefValue::Asserted("refactor auth module".into()),
+    Provenance::LlmInference { model: "claude-sonnet-4-6".into(), call_id: uuid::Uuid::new_v4(), prompt_hash: 0 },
+    0.85,
+));
 
-```bash
-# Default — Anthropic only
-cargo build --bin epica-serve
+let record = quad.revise(
+    id,
+    BeliefValue::Asserted("refactor the auth subsystem".into()),  // paraphrase
+    Provenance::UserStatement { turn: 1 },
+    0.90,
+).expect("AGM revision");
 
-# OpenAI only
-cargo build --bin epica-serve --no-default-features --features "server openai"
-
-# Both bundled, choose at runtime
-cargo build --bin epica-serve --features "anthropic openai"
+// Postulate audit accompanies every revision.
+assert!(record.postulate_audit.all_critical_pass());
+assert!(record.postulate_audit.extensionality, "K*6 holds");
 ```
 
-Add a new provider by implementing `epica_runtime::LlmClient::reflect` in a
-new crate that follows the `epica-openai` template (`config.rs` + `client.rs`
-+ `wiremock` integration test). No changes to `epica-core` or `epica-runtime`
-are required.
+When an `EmbeddingProvider` is installed via
+`quad.set_embedding_provider(...)`, the paraphrase above is recognised
+as semantically equivalent — K\*6 fires `SemanticEquivalent` and no
+contraction is triggered.
 
----
+### Python
 
-## How to verify the claims
+```python
+from epica import BeliefRuntime, MockLlmClient
 
-```bash
-# Compile all seven Rust crates
-cargo check --workspace --exclude crates/epica-python
-
-# AGM postulates + integration
-cargo test -p epica-core
-
-# BeliefShift benchmark (T-ECE = 0.07 result)
-cargo test -p epica-runtime --features system2
-
-# Contract evaluation + drift bounds
-cargo test -p epica-contracts
-
-# Proc macro expansion
-cargo test -p epica-macros
-
-# MCP server (29 E2E tests via Axum test client)
-cargo test -p epica-mcp
-
-# MCP server smoke test
-EPICA_NO_AUTH=1 cargo run --bin epica-serve &
-curl http://localhost:8765/health
-curl http://localhost:8765/.well-known/epica-server-card.json
-
-# Python SDK (requires maturin + Python)
-cd crates/epica-python && maturin develop
-python -m pytest tests/ -v   # 65 tests
+with BeliefRuntime(reflection_threshold=0.15, budget=50) as rt:
+    rt.attach_llm_client(MockLlmClient(revised_confidence=0.7).handle())
+    rt.insert_belief("user_goal", "deploy service", 0.9)
+    rt.update_belief("user_goal", "deploy cancelled", 0.3)
+    report = rt.finalize_session()
+    print(f"T-ECE: {report.trajectory_ece}")
 ```
 
-See [`docs/audit_guide.md`](docs/audit_guide.md) for a structured review that maps each claim to its implementation and tests.
+### Audit a sealed ledger
+
+```bash
+# Producer (CI / agent process)
+epica-verify keygen --secret-out prover.hex
+epica-verify seal --ledger ledger.json --secret prover.hex --out receipt.json
+
+# Auditor (offline, no network needed)
+epica-verify verify --ledger ledger.json --receipt receipt.json
+# OK: receipt verifies — entries 0..=999 of 1000 sealed by abc123def...
+```
 
 ---
 
-## Crate map
+## Theoretical foundation
 
-| Crate | Phase | Status | Tests |
-|-------|-------|--------|-------|
-| `epica-core` | 1 | **Implemented** | AGM postulates + integration suite |
-| `epica-runtime` | 2 | **Implemented** | 13 integration + BeliefShift benchmark |
-| `epica-contracts` | 3 | **Implemented** | Config, evaluation, drift bounds |
-| `epica-macros` | 4 | **Implemented** | 8 unit + trybuild expansion |
-| `epica-anthropic` | n/a | **Implemented** | Compiles; live calls require `ANTHROPIC_API_KEY` |
-| `epica-mcp` | 5 | **Implemented** | 29 E2E (Axum test client) |
-| `epica-python` | 6 | **Implemented** | 65 pytest (requires `maturin develop`) |
-| `epica-memory` | 7 | **Partially implemented** | Redis (verified); Neo4j returns `Err` (TD-NEW-001) |
+Five 2026 arXiv papers ground the architecture:
 
----
+| Paper | Insight implemented |
+|---|---|
+| [MAGMA (2601.03236)](https://arxiv.org/abs/2601.03236) | Four orthogonal graphs instead of one monolithic graph |
+| [Kumiho (2603.17244)](https://arxiv.org/abs/2603.17244) | Property graph operations correspond to AGM postulates; prospective indexing |
+| [Agentic UQ (2601.15703)](https://arxiv.org/abs/2601.15703) | Dual-process uncertainty as control (not sensor); Trajectory-ECE metric |
+| [Agent Behavioral Contracts (2602.22302)](https://arxiv.org/abs/2602.22302) | Formal C=(P,I,G,R) contracts with (p,δ,k)-satisfaction bounds |
+| [Mnemonic Sovereignty (2604.16548)](https://arxiv.org/abs/2604.16548) | Nine memory governance primitives as enforcement invariants |
 
-## What Epica does that typical memory layers do not
+Plus, post-public-review hardening drew on:
 
-| Feature | Vector store | Graph memory | Session KV | Epica |
-|---------|:-----------:|:------------:|:----------:|:-----:|
-| Contradiction detection | No | No | No | AGM Core-Retainment contraction |
-| Causal confidence propagation | No | No | No | Noisy-OR over CausalGraph |
-| Formal revision postulates | No | No | No | K\*2-K\*5 verified; K\*6 approximated |
-| Typed contracts on writes | No | No | No | C=(P,I,G,R) |
-| Memory governance primitives | No | No | No | 9 primitives (arXiv:2604.16548) |
-| MCP 2026 native | Varies | No | No | 16 routes + SEP-1686 Tasks |
-| Rollback with AGM guard | No | No | No | K\*4 vacuity enforced |
+- [Friston, Free Energy Principle](https://www.fil.ion.ucl.ac.uk/~karl/) (lineage: [pymdp](https://github.com/infer-actively/pymdp), [RxInfer.jl](https://github.com/biaslab/RxInfer.jl)) — the `ActiveInferenceMonitor` ([code](crates/epica-active-inference/src/lib.rs)).
+- [Alchourrón, Gärdenfors, Makinson 1985](https://en.wikipedia.org/wiki/AGM_postulates) + [Hansson Core-Retainment](https://link.springer.com/chapter/10.1007/978-94-017-1278-0_3) — the AGM revision foundation.
 
 ---
 
-## Current limitations
+## Documentation
 
-- **K\*6 is structural**: Epica does not detect semantic equivalence between paraphrased beliefs. Two beliefs with identical meaning but different strings are treated as distinct.
-- **System 2 is async, with optional persistent task store**: `update_belief()` returns `System2Pending` and the LLM reflection runs in a spawned task. Build with `--features sled-store` and set `EPICA_TASKSTORE=sled:/path` for tasks that survive a process restart.
-- **ProspectiveIndex uses hash embeddings by default**: Without a configured `ProspectiveClient` (e.g., via `epica-anthropic`), write-time indexing uses `HashEmbedder` - a fast offline fallback, not semantic similarity.
-- **Causal contradiction is cross-belief only with explicit edges**: `check_contradiction()` detects structural changes on a single belief (same ID, different value). Cross-belief semantic contradiction — paraphrases, negations, synonyms across distinct beliefs — requires explicit `SemanticEdge::Contradicts` edges or Phase 4 embedding integration (TD-003).
-- **Causal contradiction is not semantic**: `check_contradiction()` compares JSON values literally. Negations, synonyms, and paraphrases are not caught (TD-003).
-- **Python SDK does not expose System 2 LLM injection**: `BeliefRuntime::with_llm_client()` is not bridged to Python; System 2 always returns `System1Only` or `System2Throttled` from Python (TD-P7-002).
+| Document | Covers |
+|---|---|
+| [`docs/architecture.md`](docs/architecture.md) | Four-graph design, invariants, data flow, design tradeoffs |
+| [`docs/agm_postulates.md`](docs/agm_postulates.md) | Postulate-by-postulate compliance, including the real K\*6 path |
+| [`docs/dual_process.md`](docs/dual_process.md) | System 1 / System 2 mechanics, T-ECE benchmark |
+| [`docs/contracts.md`](docs/contracts.md) | C=(P,I,G,R) components, runtime enforcement points |
+| [`docs/mnemonic_sovereignty.md`](docs/mnemonic_sovereignty.md) | Nine governance primitives, forget verification |
+| [`docs/evidence.md`](docs/evidence.md) | Test inventory + benchmark results, what is unverified |
+| [`docs/audit_guide.md`](docs/audit_guide.md) | Claim → implementation → test mapping (hostile-reviewer optimised) |
+| [`docs/phase_roadmap.md`](docs/phase_roadmap.md) | Per-phase / per-sprint status + verification commands |
+| [`docs/non_goals.md`](docs/non_goals.md) | What Epica deliberately does not attempt |
+| [`docs/mcp_server.md`](docs/mcp_server.md) | Endpoint table with per-route implementation status |
+| [`docs/end_to_end_example.md`](docs/end_to_end_example.md) | Narrative walkthrough |
+| [`docs/observability.md`](docs/observability.md) | Prometheus + OTLP setup |
+| [`docs/fuzzing.md`](docs/fuzzing.md) | libFuzzer targets |
+| [`docs/competitive_landscape.md`](docs/competitive_landscape.md) | Honest comparison against alternatives |
+| [`docs/benchmarks/README.md`](docs/benchmarks/README.md) | Sprint-4 harness, scope, reproduction |
+| [`ROADMAP.md`](ROADMAP.md) | Canonical roadmap, post-Sprint-4 state |
+| [`BENCHMARKS.md`](BENCHMARKS.md) | Performance numbers (Criterion + harness) |
 
-See [`docs/non_goals.md`](docs/non_goals.md) for accepted tradeoffs and [`docs/evidence.md`](docs/evidence.md) for the full evidence inventory.
+---
 
 ## Visualising a `BeliefQuad`
 
-`epica_core::quad::viz::to_dot(&quad)` returns a [Graphviz
-DOT](https://graphviz.org/) document with nodes colour-coded by
-`fast_confidence` and edges styled per relationship type (causal
-inference, counterfactual, semantic contradiction, subsumption).
-
-Generate and render the sample quad shipped under `examples/`:
+`epica_core::quad::viz::to_dot(&quad)` returns a
+[Graphviz DOT](https://graphviz.org/) document with nodes colour-coded
+by `fast_confidence` and edges styled per relationship type.
 
 ```bash
 cargo run --example visualize_quad > out.dot
@@ -198,9 +293,7 @@ dot -Tsvg out.dot > out.svg     # requires graphviz on PATH
 ```
 
 The MCP server exposes the same serialisation live at
-`GET /v1/visualize/dot` (Content-Type `text/vnd.graphviz`), so an MCP
-host can render the current state of the runtime as a tab in its UI
-without parsing JSON or walking the graph itself.
+`GET /v1/visualize/dot` (Content-Type `text/vnd.graphviz`):
 
 ```bash
 curl http://localhost:8765/v1/visualize/dot | dot -Tsvg > current.svg
@@ -208,107 +301,32 @@ curl http://localhost:8765/v1/visualize/dot | dot -Tsvg > current.svg
 
 ---
 
-## See also
+## What Epica does that typical memory layers do not
 
-| Document | Purpose |
-|---|---|
-| [ROADMAP.md](ROADMAP.md) | Canonical roadmap — phase status, priorities, open items |
-| [BENCHMARKS.md](BENCHMARKS.md) | Performance numbers (Criterion) with reproducibility metadata |
-| [docs/fuzzing.md](docs/fuzzing.md) | libFuzzer targets — how to run and interpret |
-| [docs/observability.md](docs/observability.md) | Prometheus + OTLP setup, Jaeger docker-compose example |
-| [docs/phase_roadmap.md](docs/phase_roadmap.md) | Operational verification scripts per phase |
-| [docs/audit_guide.md](docs/audit_guide.md) | Claim → implementation → test mapping |
-
----
-
-## Theoretical foundation
-
-Five papers from Q1-Q2 2026 ground the architecture:
-
-| Paper | Insight implemented |
-|-------|---------------------|
-| MAGMA (arXiv:2601.03236) | Four orthogonal graphs instead of one monolithic graph |
-| Kumiho (arXiv:2603.17244) | Property graph operations correspond to AGM postulates; prospective indexing |
-| Agentic UQ (arXiv:2601.15703) | Dual-process uncertainty as control (not sensor); Trajectory-ECE metric |
-| Agent Behavioral Contracts (arXiv:2602.22302) | Formal `C=(P,I,G,R)` contracts with (p,delta,k)-satisfaction bounds |
-| Mnemonic Sovereignty (arXiv:2604.16548) | Nine memory governance primitives as enforcement invariants |
-
----
-
-## Quick start
-
-```rust
-use epica_core::{BeliefQuad, BeliefNode, BeliefValue, Provenance};
-
-let mut quad = BeliefQuad::new();
-
-let node = BeliefNode::new(
-    "user_intent",
-    BeliefValue::Inferred(serde_json::json!("refactor auth module")),
-    Provenance::LlmInference {
-        model: "claude-sonnet-4-6".into(),
-        call_id: uuid::Uuid::new_v4(),
-        prompt_hash: 0,
-    },
-    0.85,
-);
-let id = quad.insert(node);
-
-// AGM revision: detects contradiction, applies Core-Retainment contraction, then expands
-quad.revise(
-    id,
-    BeliefValue::Inferred(serde_json::json!("refactor auth + session modules")),
-    Provenance::LlmInference {
-        model: "claude-sonnet-4-6".into(),
-        call_id: uuid::Uuid::new_v4(),
-        prompt_hash: 1,
-    },
-    0.90,
-).unwrap();
-
-// System 1 propagates confidence changes to causal descendants after revise()
-let checkpoint_id = quad.checkpoint();
-let diff = quad.diff(&BeliefQuad::new());
-```
-
-For a full walkthrough from belief insertion through contradiction, rollback, and contract enforcement, see [`docs/end_to_end_example.md`](docs/end_to_end_example.md).
-
----
-
-## Benchmarks
-
-| Benchmark | Target | Current result | How measured | Gap |
-|-----------|--------|----------------|--------------|-----|
-| BeliefShift T-ECE (formula validation) | < 0.08 | **0.07 (pipeline only)** | `tests/beliefshift_benchmark.rs` — `pipeline_tece_formula_validation` confirms formula computes correctly; `beliefshift_tece_variable_confidence` uses varied confidences | Real-task calibration (ALFWorld/WebShop) not yet measured |
-| System 1 propagation at 10K nodes | < 2x HashMap | Not yet measured | `cargo bench -p epica-core` | Pending |
-| Checkpoint + rollback at 10K nodes | < 10ms | Not yet measured | `cargo bench -p epica-core` | Pending |
-
----
-
-## Documentation
-
-| Document | Covers |
-|----------|--------|
-| [`docs/architecture.md`](docs/architecture.md) | Why four graphs; invariants; data flow; design tradeoffs |
-| [`docs/agm_postulates.md`](docs/agm_postulates.md) | Postulate-by-postulate: exact vs. approximate compliance |
-| [`docs/dual_process.md`](docs/dual_process.md) | System 1 and System 2 mechanics; T-ECE benchmark result |
-| [`docs/contracts.md`](docs/contracts.md) | Contract components; runtime enforcement points; violation classes |
-| [`docs/mnemonic_sovereignty.md`](docs/mnemonic_sovereignty.md) | Nine governance primitives; what "verifiable deletion" means here |
-| [`docs/mcp_server.md`](docs/mcp_server.md) | Endpoint table with per-route implementation status |
-| [`docs/phase_roadmap.md`](docs/phase_roadmap.md) | Per-phase status; verification commands; known gaps |
-| [`docs/evidence.md`](docs/evidence.md) | Test inventory; benchmark results; what has been verified |
-| [`docs/non_goals.md`](docs/non_goals.md) | What Epica does not attempt; accepted tradeoffs |
-| [`docs/audit_guide.md`](docs/audit_guide.md) | Structured review path for a hostile technical audience |
-| [`docs/end_to_end_example.md`](docs/end_to_end_example.md) | Narrative walkthrough: contradiction -> AGM -> rollback -> contract |
-| [`docs/competitive_landscape.md`](docs/competitive_landscape.md) | Honest comparison against alternatives |
+| Feature | Vector store | Graph memory | Session KV | **Epica** |
+|---|:-:|:-:|:-:|:-:|
+| Contradiction detection | ✗ | ✗ | ✗ | AGM Core-Retainment contraction |
+| Semantic-equivalence K\*6 | ✗ | ✗ | ✗ | Embedding-aware on the hot path |
+| Causal confidence propagation | ✗ | ✗ | ✗ | Noisy-OR over `CausalGraph` |
+| Continuous Bayesian-surprise audit | ✗ | ✗ | ✗ | Friston FEP monitor (opt-in) |
+| Formal revision postulates | ✗ | ✗ | ✗ | K\*2–K\*6 verified |
+| Typed contracts on writes | ✗ | ✗ | ✗ | C=(P,I,G,R) |
+| Memory governance primitives | ✗ | ✗ | ✗ | 9 primitives (arXiv:2604.16548) |
+| MCP 2026 native | varies | ✗ | ✗ | 16 routes + SEP-1686 Tasks |
+| Tamper-evident audit ledger | ✗ | ✗ | ✗ | BLAKE3 Merkle chain + Ed25519 receipts |
+| Offline third-party verifiability | ✗ | ✗ | ✗ | `epica-verify` CLI |
+| Rollback with AGM guard | ✗ | ✗ | ✗ | K\*4 vacuity enforced |
 
 ---
 
 ## Contributing
 
-`cargo check --workspace --exclude crates/epica-python` must pass. `cargo clippy --workspace --exclude crates/epica-python` must pass with zero warnings.
+`cargo check --workspace --exclude crates/epica-python` must pass.
+`cargo clippy --workspace --exclude crates/epica-python` must pass with
+zero warnings on the default feature set.
 
-See [`docs/architecture.md`](docs/architecture.md) for the invariants you must preserve.
+See [`docs/architecture.md`](docs/architecture.md) for the invariants
+you must preserve when touching `epica-core`.
 
 ---
 

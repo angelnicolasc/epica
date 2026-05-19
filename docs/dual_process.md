@@ -15,9 +15,8 @@ How Epica models and propagates uncertainty through System 1 (fast, causal) and 
 
 ## What is still approximate or planned
 
-- System 2 calls are synchronous in the current runtime ([TD-P5-002](phase_roadmap.md#open-technical-debts))
-- System 2 LLM is not accessible from Python ([TD-P7-002](phase_roadmap.md#open-technical-debts))
-- T-ECE is validated on a deterministic benchmark; performance on real partial-observability sessions is not yet measured
+- T-ECE is validated on a deterministic benchmark and synthetic harness traces; performance on real partial-observability sessions (live ALFWorld / WebShop) is not yet measured (TD-P13-001)
+- `tau = 0.15` borrowed directly from the paper; not independently calibrated on Epica's runtime
 
 ---
 
@@ -88,7 +87,7 @@ Without a configured `LlmClient`, `update_belief()` returns `System1Only` - no b
 Implemented in: `crates/epica-runtime/src/runtime.rs`, `crates/epica-anthropic/src/client.rs`  
 Tested in: `crates/epica-runtime/tests/system2_mock.rs`
 
-**Current limitation**: System 2 executes synchronously in the current implementation. The task created in the MCP server appears immediately as `Completed`. Genuine async System 2 (where the caller polls for the result) requires persistent task storage (TD-P5-002).
+System 2 is non-blocking: `update_belief()` returns `System2Pending { task_id }` and continues; the LLM reflection runs in the background and is polled via `GET /v1/tasks/:id` or SSE. Task storage uses `SledTaskStore` (feature `sled-store`) and survives server restarts.
 
 ---
 
@@ -125,13 +124,12 @@ This value is borrowed directly from the paper's empirical finding. It has not b
 ## Current status
 
 - System 1: implemented and tested
-- System 2: implemented (sync); real LLM calls via `epica-anthropic`
-- T-ECE: implemented; BeliefShift result = 0.07 (verified)
-- Verified by: `cargo test -p epica-runtime --features system2`
+- System 2: implemented (async, non-blocking); real LLM calls via `epica-anthropic` and `epica-openai`; Python `LlmClient` injection via `PyLlmClientHandle` + `PyMockLlmClient`
+- T-ECE: implemented; BeliefShift result = 0.07 (deterministic benchmark) + synthetic harness (0.080 alfworld / 0.658 webshop)
+- Verified by: `cargo test -p epica-runtime --features system2,active-inference`
 
 ## Known limitations
 
-- System 2 is synchronous ([TD-P5-002](phase_roadmap.md#open-technical-debts))
-- T-ECE validated only on deterministic benchmark, not on real partial-observability workloads
+- T-ECE validated on deterministic benchmark and synthetic trajectories; real partial-observability workloads not yet measured (TD-P13-001)
 - `tau = 0.15` not independently calibrated for Epica's runtime
-- Python SDK does not expose System 2 LLM injection ([TD-P7-002](phase_roadmap.md#open-technical-debts))
+- No Python-level async (`await`) bridge for System 2 results (TD-P6-001); polling is via the MCP HTTP layer or the Rust API
