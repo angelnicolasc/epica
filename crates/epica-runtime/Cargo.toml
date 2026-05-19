@@ -14,10 +14,14 @@ categories.workspace = true
 default = ["system2"]
 # Enables the LLMClient trait + System 2 activation (requires network / async LLM calls)
 system2 = ["dep:async-trait"]
+# Enables continuous variational free-energy monitoring (Sprint 2). Opt-in:
+# off by default keeps the hot path overhead-free and the dep graph minimal.
+active-inference = ["dep:epica-active-inference"]
 
 [dependencies]
 epica-core.path        = "../epica-core"
 epica-contracts.path   = "../epica-contracts"
+epica-active-inference = { path = "../epica-active-inference", optional = true }
 tokio          = { workspace = true, features = ["rt-multi-thread", "sync", "macros", "time"] }
 serde.workspace        = true
 serde_json.workspace   = true

@@ -57,6 +57,7 @@ pub mod belief;
 pub mod checkpoint;
 pub mod counterfactual;
 pub mod diff;
+pub mod embedding;
 pub mod error;
 pub mod prospective;
 pub mod quad;
@@ -77,11 +78,16 @@ pub use counterfactual::CounterfactualWorld;
 
 pub use diff::{BeliefModification, BeliefQuadDiff, BeliefSnapshot};
 
+pub use embedding::{
+    cosine_similarity, CachedEmbeddingProvider, EmbeddingProvider, EquivalenceVerdict,
+    NullEmbeddingProvider, SemanticEquivalence,
+};
+
 pub use error::EpicaError;
 
 pub use prospective::{CausalEvent, ProspectiveEntry, ProspectiveIndex};
 
-pub use quad::{BeliefQuad, CausalEdge, EntityEdge, SemanticEdge, TemporalEdge};
+pub use quad::{BeliefQuad, CausalEdge, EntityEdge, SemanticEdge, TemporalEdge, VerdictTrace};
 
 pub use revision::{BeliefRevisionError, PostulateAudit, RevisionRecord, RollbackError};
 

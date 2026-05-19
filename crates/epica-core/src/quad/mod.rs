@@ -4,6 +4,7 @@ pub mod semantic;
 pub mod temporal;
 pub mod viz;
 
+use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use serde::{Deserialize, Serialize};
@@ -12,17 +13,18 @@ use slotmap::SlotMap;
 use crate::{
     belief::{BeliefId, BeliefNode, BeliefValue},
     checkpoint::types::BeliefQuadCheckpoint,
+    embedding::{EmbeddingProvider, SemanticEquivalence},
     prospective::ProspectiveIndex,
 };
 
 pub use causal::CausalEdge;
 pub use entity::EntityEdge;
-pub use semantic::SemanticEdge;
+pub use semantic::{SemanticEdge, VerdictTrace};
 pub use temporal::TemporalEdge;
 
 use causal::CausalGraph;
 use entity::EntityGraph;
-use semantic::SemanticGraph;
+pub(crate) use semantic::SemanticGraph;
 use temporal::TemporalGraph;
 
 /// The central data structure of Epica.
@@ -67,6 +69,19 @@ pub struct BeliefQuad {
     #[serde(skip)]
     pub(crate) checkpoints: Vec<BeliefQuadCheckpoint>,
     pub(crate) prospective_index: ProspectiveIndex,
+    /// Optional embedding provider consulted for K\*6 semantic equivalence.
+    ///
+    /// `None` (the default) reproduces the pre-existing literal-only
+    /// contradiction semantics. Set via
+    /// [`BeliefQuad::set_embedding_provider`].
+    #[serde(skip)]
+    pub(crate) embedding_provider: Option<Arc<dyn EmbeddingProvider>>,
+    /// Thresholds for cosine similarity classification when an embedding
+    /// provider is installed. Defaults are tuned for sentence-transformer
+    /// scale embeddings; override per-deployment via
+    /// [`BeliefQuad::set_semantic_equivalence`].
+    #[serde(skip)]
+    pub(crate) equivalence: SemanticEquivalence,
 }
 
 // Manual Clone: derive would work too but we want to be explicit about the cost.
@@ -81,6 +96,8 @@ impl Clone for BeliefQuad {
             version: self.version,
             checkpoints: self.checkpoints.clone(),
             prospective_index: self.prospective_index.clone(),
+            embedding_provider: self.embedding_provider.clone(),
+            equivalence: self.equivalence,
         }
     }
 }
@@ -107,7 +124,36 @@ impl BeliefQuad {
             version: 0,
             checkpoints: Vec::new(),
             prospective_index: ProspectiveIndex::new(),
+            embedding_provider: None,
+            equivalence: SemanticEquivalence::default(),
         }
+    }
+
+    /// Install an embedding provider used for K\*6 semantic equivalence checks.
+    ///
+    /// When set, `check_contradiction` consults the provider before declaring
+    /// a contradiction on `Asserted/Asserted` value pairs. The provider's
+    /// `embed_cached` is sync and must not block; a miss falls back to the
+    /// literal comparison.
+    pub fn set_embedding_provider(&mut self, provider: Arc<dyn EmbeddingProvider>) {
+        self.embedding_provider = Some(provider);
+    }
+
+    /// Clear any previously-installed embedding provider.
+    pub fn clear_embedding_provider(&mut self) {
+        self.embedding_provider = None;
+    }
+
+    /// Override the cosine-similarity thresholds used when an embedding
+    /// provider is installed. Defaults: `equivalence = 0.92`,
+    /// `contradiction = -0.30`.
+    pub fn set_semantic_equivalence(&mut self, equivalence: SemanticEquivalence) {
+        self.equivalence = equivalence;
+    }
+
+    /// Read-only access to the active semantic-equivalence thresholds.
+    pub fn semantic_equivalence(&self) -> SemanticEquivalence {
+        self.equivalence
     }
 
     // ── Core CRUD ────────────────────────────────────────────────────────────
@@ -241,12 +287,38 @@ impl BeliefQuad {
     /// Returns `true` if setting belief `id` to `new_value` would create a contradiction
     /// in the current state of the quad.
     ///
-    /// Phase 1: checks value-level equality AND explicit `SemanticEdge::Contradicts` edges.
-    /// Phase 4 (TD-003): embedding-based semantic contradiction detection.
+    /// Path:
+    /// 1. If an [`EmbeddingProvider`] is installed and both values are
+    ///    `Asserted` strings whose embeddings are cached, classify by cosine
+    ///    similarity against the configured [`SemanticEquivalence`]
+    ///    thresholds — paraphrases short-circuit to "no contradiction" (the
+    ///    K\*6 case);
+    /// 2. otherwise, fall back to the literal `value_contradicts` plus any
+    ///    explicit `SemanticEdge::Contradicts` edge.
     pub(crate) fn check_contradiction(&self, id: BeliefId, new_value: &BeliefValue) -> bool {
-        let Some(node) = self.nodes.get(id) else { return false };
-        SemanticGraph::value_contradicts(&node.value, new_value)
-            || self.semantic.has_contradiction_edges(id)
+        let (contradicts, _trace) = self.check_contradiction_traced(id, new_value);
+        contradicts
+    }
+
+    /// Same as [`check_contradiction`](Self::check_contradiction) but returns
+    /// the [`VerdictTrace`] taken by the semantic-aware comparison. Used by
+    /// [`PostulateAudit::verify`] to build a real K\*6 audit entry.
+    pub(crate) fn check_contradiction_traced(
+        &self,
+        id: BeliefId,
+        new_value: &BeliefValue,
+    ) -> (bool, VerdictTrace) {
+        let Some(node) = self.nodes.get(id) else {
+            return (false, VerdictTrace::LiteralAgree);
+        };
+        let (value_contra, trace) = SemanticGraph::value_contradicts_semantic(
+            self.embedding_provider.as_deref(),
+            &self.equivalence,
+            &node.value,
+            new_value,
+        );
+        let edge_contra = self.semantic.has_contradiction_edges(id);
+        (value_contra || edge_contra, trace)
     }
 
     // ── Read-only graph accessors (used by system1, diff, counterfactual) ─────

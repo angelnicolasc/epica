@@ -13,7 +13,7 @@ categories           = ["database", "asynchronous"]
 [features]
 default = []
 redis   = ["dep:redis"]
-neo4j   = [] # official Rust Neo4j driver pending; stub compiles without it
+neo4j   = ["dep:neo4rs"]
 
 [dependencies]
 epica-core.path       = "../epica-core"
@@ -25,6 +25,7 @@ thiserror.workspace   = true
 tracing.workspace     = true
 async-trait.workspace = true
 redis = { workspace = true, optional = true }
+neo4rs = { version = "0.8", optional = true }
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["test-util"] }

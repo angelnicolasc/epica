@@ -12,6 +12,7 @@ use epica_core::{BeliefNode, BeliefQuad, BeliefValue, Provenance};
 use epica_runtime::{BeliefRuntime, RuntimeUpdateResult};
 
 use crate::error::{map_rollback_err, map_runtime_err, EpicaError};
+use crate::llm_client::PyLlmClientHandle;
 use crate::query::{diff_to_py, PyBeliefDiff};
 use crate::session::{report_to_py, PySessionReport};
 use crate::types::{node_to_py, PyBeliefNode};
@@ -187,6 +188,29 @@ impl PyBeliefRuntime {
         let RuntimeState { inner, rt } = &mut *state;
         let snapshots = rt.block_on(inner.retrieve_for_query(query, budget));
         snapshots.into_iter().map(|s| (s.key, s.fast_confidence)).collect()
+    }
+
+    // ── LLM client injection (TD-P7-002) ──────────────────────────────────────
+
+    /// Attach an `LlmClient` to enable System 2 reflection.
+    ///
+    /// Without an attached client, `update_belief()` returns
+    /// `"system1_only"` even when the divergence threshold is exceeded — no
+    /// budget is consumed. After attachment the System 2 path is active.
+    ///
+    /// `handle` is produced by a concrete client wrapper such as
+    /// `MockLlmClient(...).handle()` or (forthcoming) an Anthropic / OpenAI
+    /// client binding.
+    pub fn attach_llm_client(&self, handle: &PyLlmClientHandle) {
+        let mut state = self.state.lock().unwrap();
+        state.inner.set_llm_client(handle.inner.clone());
+    }
+
+    /// Detach any previously-attached `LlmClient`. The runtime returns to the
+    /// pre-attachment behavior (`"system1_only"` results).
+    pub fn detach_llm_client(&self) {
+        let mut state = self.state.lock().unwrap();
+        state.inner.clear_llm_client();
     }
 
     // ── Checkpoints ───────────────────────────────────────────────────────────

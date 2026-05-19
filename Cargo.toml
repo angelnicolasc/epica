@@ -6,11 +6,14 @@ members = [
     "crates/epica-runtime",
     "crates/epica-anthropic",
     "crates/epica-openai",
+    "crates/epica-active-inference",
     "crates/epica-contracts",
     "crates/epica-macros",
     "crates/epica-mcp",
     "crates/epica-memory",
     "crates/epica-python",
+    "crates/epica-zk-evidence",
+    "crates/epica-benchmarks",
 ]
 # Fuzz crates are standalone cargo-fuzz packages: they depend on libfuzzer-sys,
 # require nightly + the libFuzzer runtime, and must NOT be pulled into the
@@ -18,16 +21,26 @@ members = [
 exclude = [
     "crates/epica-core/fuzz",
 ]
+# `epica-python` is intentionally left out of `default-members`: PyO3 requires
+# a Python interpreter on the build host (sets `PYTHON_SYS_EXECUTABLE` /
+# `pyo3-build-config`) and excluding it keeps `cargo check --workspace` green
+# for contributors without Python. The crate is still a workspace member and
+# is built explicitly via `cargo check -p epica-python` or by `maturin
+# develop` from `crates/epica-python/`. Tracked as TD-P7-001 — resolution is
+# this documented carve-out, not a forced inclusion.
 default-members = [
     "epica",
     "crates/epica-core",
     "crates/epica-runtime",
     "crates/epica-anthropic",
     "crates/epica-openai",
+    "crates/epica-active-inference",
     "crates/epica-contracts",
     "crates/epica-macros",
     "crates/epica-mcp",
     "crates/epica-memory",
+    "crates/epica-zk-evidence",
+    "crates/epica-benchmarks",
 ]
 
 [workspace.package]
@@ -64,6 +77,17 @@ tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
 
 # Math / numerics
 ordered-float  = "4.2"
+
+# Cryptographic hashing — Merkle audit ledger (Sprint 3)
+blake3         = "1.5"
+
+# Cryptographic signatures — commitment-based EvidenceReceipt (Sprint 3.2)
+ed25519-dalek  = { version = "2.1", features = ["rand_core", "pkcs8", "pem"] }
+rand_core      = { version = "0.6", features = ["std"] }
+hex            = "0.4"
+
+# CLI parsing — epica-verify (Sprint 3.3)
+clap           = { version = "4.5", features = ["derive"] }
 
 # Serialization extras
 toml           = "0.8"

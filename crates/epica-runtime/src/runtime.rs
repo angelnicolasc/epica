@@ -75,6 +75,13 @@ pub struct BeliefRuntime {
     #[cfg(feature = "system2")]
     pub(crate) llm_client: Option<Arc<dyn LlmClient>>,
 
+    /// Sprint 2: optional variational free-energy monitor. `None` is the
+    /// zero-cost default; when `Some`, every successful `insert_belief`
+    /// emits a [`SurpriseSignal`] (best-effort: lock contention or
+    /// out-of-budget reservoirs do not block the insert).
+    #[cfg(feature = "active-inference")]
+    pub(crate) active_inference: Option<Arc<Mutex<epica_active_inference::ActiveInferenceMonitor>>>,
+
     /// Global default τ for System 2 activation, applied to any node whose
     /// `reflection_threshold` has not been overridden via `.with_reflection_threshold()`.
     /// Configurable at runtime via `EPICA_REFLECTION_THRESHOLD` env var.
@@ -114,6 +121,8 @@ impl BeliefRuntime {
             governance_tracker: GovernanceTracker::new(),
             #[cfg(feature = "system2")]
             llm_client: None,
+            #[cfg(feature = "active-inference")]
+            active_inference: None,
             default_reflection_threshold: DEFAULT_REFLECTION_THRESHOLD,
             embedder: None,
             prospective_client: None,
@@ -137,6 +146,67 @@ impl BeliefRuntime {
     pub fn with_llm_client(mut self, client: Arc<dyn LlmClient>) -> Self {
         self.llm_client = Some(client);
         self
+    }
+
+    /// Mutable counterpart of [`Self::with_llm_client`] — attach an
+    /// `LlmClient` after construction.
+    ///
+    /// This is the entry point used by the Python SDK, where the runtime is
+    /// already wrapped in `Arc<Mutex<…>>` and the consuming builder cannot be
+    /// applied. The clone of the previous client (if any) is dropped.
+    #[cfg(feature = "system2")]
+    pub fn set_llm_client(&mut self, client: Arc<dyn LlmClient>) {
+        self.llm_client = Some(client);
+    }
+
+    /// Detach any previously-attached `LlmClient`.
+    #[cfg(feature = "system2")]
+    pub fn clear_llm_client(&mut self) {
+        self.llm_client = None;
+    }
+
+    /// Attach an [`ActiveInferenceMonitor`] (Sprint 2). Every successful
+    /// `insert_belief` will then call `monitor.observe(&quad, &node)` and
+    /// emit a `SurpriseSignal` for the runtime to consume as telemetry.
+    ///
+    /// Best-effort: a poisoned mutex on the monitor side never blocks the
+    /// insert — the observation is silently skipped, matching the
+    /// non-invariant nature of the FEP audit.
+    ///
+    /// [`ActiveInferenceMonitor`]: epica_active_inference::ActiveInferenceMonitor
+    #[cfg(feature = "active-inference")]
+    pub fn with_active_inference(
+        mut self,
+        monitor: Arc<Mutex<epica_active_inference::ActiveInferenceMonitor>>,
+    ) -> Self {
+        self.active_inference = Some(monitor);
+        self
+    }
+
+    /// Mutable variant of [`Self::with_active_inference`] — attach a
+    /// monitor after construction.
+    #[cfg(feature = "active-inference")]
+    pub fn set_active_inference(
+        &mut self,
+        monitor: Arc<Mutex<epica_active_inference::ActiveInferenceMonitor>>,
+    ) {
+        self.active_inference = Some(monitor);
+    }
+
+    /// Detach any previously-attached active-inference monitor.
+    #[cfg(feature = "active-inference")]
+    pub fn clear_active_inference(&mut self) {
+        self.active_inference = None;
+    }
+
+    /// Snapshot the most recently emitted [`SurpriseSignal`], if any. The
+    /// monitor stores the entire rolling history; this helper just lifts
+    /// the head for callers who don't want to lock the whole thing.
+    #[cfg(feature = "active-inference")]
+    pub async fn last_surprise(&self) -> Option<f64> {
+        let monitor = self.active_inference.as_ref()?;
+        let guard = monitor.lock().await;
+        guard.history().back().copied()
     }
 
     // ── Phase 3: contract + sovereignty builders ──────────────────────────────
@@ -220,7 +290,47 @@ impl BeliefRuntime {
         if should_index {
             self.index_belief_prospective(id, &value_repr).await;
         }
+        #[cfg(feature = "active-inference")]
+        self.observe_active_inference(id).await;
         id
+    }
+
+    /// Sprint 2: best-effort active-inference observation hook.
+    ///
+    /// Runs after the belief is in the quad and the key index is updated,
+    /// so the monitor reads a consistent state. Failures (the monitor
+    /// mutex is poisoned, the just-inserted id was removed concurrently,
+    /// …) are logged and swallowed — the FEP audit is a telemetry
+    /// channel, never a blocker on insertion.
+    #[cfg(feature = "active-inference")]
+    async fn observe_active_inference(&self, id: BeliefId) {
+        let Some(monitor) = self.active_inference.as_ref() else {
+            return;
+        };
+        let quad = self.quad.read().await;
+        let Some(node) = quad.get(id).cloned() else {
+            tracing::warn!(
+                ?id,
+                "active-inference: just-inserted belief vanished before observation"
+            );
+            return;
+        };
+        let mut guard = monitor.lock().await;
+        let signal = guard.observe(&quad, &node);
+        if signal.exceeds_budget {
+            tracing::warn!(
+                free_energy = signal.free_energy,
+                budget_remaining = signal.budget_remaining,
+                n_beliefs = signal.n_beliefs,
+                "active-inference: homeostatic budget breached"
+            );
+        } else {
+            tracing::debug!(
+                free_energy = signal.free_energy,
+                budget_remaining = signal.budget_remaining,
+                "active-inference: observation recorded"
+            );
+        }
     }
 
     /// Write-time prospective indexing (TD-001, Phase 4).

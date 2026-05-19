@@ -9,6 +9,7 @@
 pub mod belief;
 pub mod contracts;
 pub mod error;
+pub mod llm_client;
 pub mod query;
 pub mod runtime;
 pub mod session;
@@ -18,6 +19,7 @@ use pyo3::prelude::*;
 
 use belief::PyBeliefQuad;
 use contracts::PyBehavioralContract;
+use llm_client::{PyLlmClientHandle, PyMockLlmClient};
 use query::{PyBeliefDiff, PyCounterfactualResult};
 use runtime::PyBeliefRuntime;
 use session::PySessionReport;
@@ -39,6 +41,10 @@ fn _epica(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyBeliefQuad>()?;
     m.add_class::<PyBeliefRuntime>()?;
     m.add_class::<PyBehavioralContract>()?;
+
+    // ── LLM client injection (TD-P7-002) ──────────────────────────────────────
+    m.add_class::<PyLlmClientHandle>()?;
+    m.add_class::<PyMockLlmClient>()?;
 
     // ── Package metadata ──────────────────────────────────────────────────────
     m.add("__version__", "0.6.0")?;

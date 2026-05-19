@@ -8,6 +8,7 @@ use petgraph::{
 use serde::{Deserialize, Serialize};
 
 use crate::belief::{BeliefId, BeliefValue};
+use crate::embedding::{EmbeddingProvider, EquivalenceVerdict, SemanticEquivalence};
 
 /// Directed semantic relationship between two beliefs.
 ///
@@ -145,6 +146,72 @@ impl SemanticGraph {
             _ => true,
         }
     }
+
+    /// K\*6-aware value comparison.
+    ///
+    /// Identical to [`value_contradicts`](Self::value_contradicts) except that
+    /// when both values are `Asserted` strings the call consults the
+    /// `provider` cache for embeddings; if both texts are cached and their
+    /// cosine similarity lands in the `equivalence` band the comparison
+    /// returns `false` (no contradiction) even if the literal strings differ.
+    /// When the cache misses on either side the function falls back to the
+    /// literal comparison — zero regression for unconfigured runtimes.
+    ///
+    /// Returns also a `VerdictTrace` recording which path was taken; the
+    /// trace is consumed by [`PostulateAudit::verify`] to build a real K\*6
+    /// audit record.
+    pub fn value_contradicts_semantic(
+        provider: Option<&dyn EmbeddingProvider>,
+        equivalence: &SemanticEquivalence,
+        current_value: &BeliefValue,
+        new_value: &BeliefValue,
+    ) -> (bool, VerdictTrace) {
+        // Cheap path: literal comparison decides "no contradiction" unambiguously.
+        let literal = Self::value_contradicts(current_value, new_value);
+        if !literal {
+            return (false, VerdictTrace::LiteralAgree);
+        }
+        // Semantic override only applies to Asserted/Asserted pairs.
+        if let (BeliefValue::Asserted(a), BeliefValue::Asserted(b)) = (current_value, new_value) {
+            if let Some(p) = provider {
+                if let (Some(va), Some(vb)) = (p.embed_cached(a), p.embed_cached(b)) {
+                    match equivalence.classify(&va, &vb) {
+                        EquivalenceVerdict::Equivalent(s) => {
+                            return (false, VerdictTrace::SemanticEquivalent(s));
+                        }
+                        EquivalenceVerdict::Contradicts(s) => {
+                            return (true, VerdictTrace::SemanticContradicts(s));
+                        }
+                        EquivalenceVerdict::Undecided(s) => {
+                            return (true, VerdictTrace::LiteralDisagreeUndecided(s));
+                        }
+                    }
+                }
+            }
+        }
+        (true, VerdictTrace::LiteralDisagreeNoCache)
+    }
+}
+
+/// Per-comparison trace recording which decision path
+/// [`SemanticGraph::value_contradicts_semantic`] took.
+///
+/// Surfaced through `PostulateAudit` so that K\*6 violations can be diagnosed
+/// (was it a paraphrase the provider mis-classified? a real contradiction?).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum VerdictTrace {
+    /// Literal comparison said "no contradiction" — semantic check unused.
+    LiteralAgree,
+    /// Literal said "differ" but the cache had both embeddings and the
+    /// cosine landed in the equivalence band.
+    SemanticEquivalent(f32),
+    /// Literal said "differ" and the cosine landed in the contradiction band.
+    SemanticContradicts(f32),
+    /// Literal said "differ", embeddings present, cosine in the gray band.
+    LiteralDisagreeUndecided(f32),
+    /// Literal said "differ" and at least one embedding was missing from
+    /// the cache — same effective verdict as the legacy literal path.
+    LiteralDisagreeNoCache,
 }
 
 impl Default for SemanticGraph {

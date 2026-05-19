@@ -75,12 +75,12 @@ impl BeliefQuad {
             return Err(BeliefRevisionError::BeliefNotFound);
         }
 
-        let contradicts = self.check_contradiction(belief_id, &new_value);
+        let (contradicts, trace) = self.check_contradiction_traced(belief_id, &new_value);
 
         // Run postulate audit against the pre-revision state.
         // K*4 (vacuity) is informational — false means contraction is needed, which is legitimate.
         // K*2, K*3, K*5, K*6 must hold in every build; violations are a runtime logic error.
-        let audit = PostulateAudit::verify(self, belief_id, &new_value, contradicts);
+        let audit = PostulateAudit::verify(self, belief_id, &new_value, contradicts, trace);
         if !audit.all_critical_pass() {
             return Err(BeliefRevisionError::PostulateViolation {
                 postulate: audit.failed_postulate_name(),
