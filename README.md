@@ -156,8 +156,9 @@ implementation → test map an external reviewer can walk top-to-bottom.
 | **Synthetic ALFWorld/WebShop benchmark harness** | ✅ | `target/release/epica-bench run-all` — see `docs/benchmarks/` |
 
 The capabilities marked **bold** are post-public-review hardening
-deliverables — see [DEVLOG.md](DEVLOG.md) for sprint-by-sprint
-disclosure of what was added, what was pivoted, and why.
+deliverables — see the [commit history](https://github.com/angelnicolasc/epica/commits/main)
+for sprint-by-sprint disclosure of what was added, what was pivoted,
+and why.
 
 ---
 
@@ -173,9 +174,9 @@ when the infrastructure pre-requisites are in place.
 | **ZK proofs over the audit ledger** | BLAKE3 Merkle commitment + Ed25519 signature → tamper-evidence + non-repudiation + offline verification. `EvidenceReceipt` wire format is stable. | RISC-V toolchain (`cargo-risczero` + `riscv32im-risc0-zkvm-elf`). Skeleton at [`zk_skeleton.rs`](crates/epica-zk-evidence/src/zk_skeleton.rs); feature `risc0`. |
 | **Native Python `await` bridge** | Sync Python SDK fully wired, including `LlmClient` injection via `MockLlmClient`. | `pyo3-asyncio` stable for pyo3 0.22 (TD-P6-001). |
 
-These pivots are documented in [DEVLOG.md](DEVLOG.md) with the cost /
-value reasoning. None of them is hidden behind silent stubs — each
-seam is a published trait + an `_AVAILABLE: bool` flag.
+These pivots are documented in the seam module headers linked above
+with the cost / value reasoning. None of them is hidden behind silent
+stubs — each seam is a published trait + an `_AVAILABLE: bool` flag.
 
 ---
 

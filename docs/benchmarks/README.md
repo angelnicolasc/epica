@@ -40,8 +40,8 @@ contradiction sequences, paraphrase of intent across turns. The
 generator is in `crates/epica-benchmarks/src/traces.rs`.
 
 This is a deliberate scope decision documented in
-[`DEVLOG.md` § Sprint 4](../../DEVLOG.md) and in
-[`crates/epica-benchmarks/src/real_adapters.rs`](../../crates/epica-benchmarks/src/real_adapters.rs).
+[`crates/epica-benchmarks/src/real_adapters.rs`](../../crates/epica-benchmarks/src/real_adapters.rs),
+whose module header carries the cost / value reasoning.
 The honest summary:
 
 - **Synthetic numbers are reproducible**: no Python env, no AI2-THOR

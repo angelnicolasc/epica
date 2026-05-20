@@ -6,8 +6,8 @@
 > path listed, treat the claim as unverified until tested.
 >
 > Updated for the post-public-review hardening (Sprints 1–4) and the
-> integration step that closes TD-P8-001. The canonical change log lives
-> in [DEVLOG.md](../DEVLOG.md).
+> integration step that closes TD-P8-001. The canonical public change log
+> lives in the [commit history](https://github.com/angelnicolasc/epica/commits/main).
 
 ## Status legend
 

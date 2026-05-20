@@ -174,11 +174,10 @@ The Sprint-4 plan cited ALFWorld (AI2-THOR text agent) and WebShop (Flask
 shopping simulator) as the target live environments. **Current numbers are
 from synthetic trajectory generators** that emulate the *epistemic shape*
 of those benchmarks — not from a live Python environment. This is a
-deliberate scope decision documented in [`DEVLOG.md`](./DEVLOG.md) and
-the `RealEnvAdapter` trait in
+deliberate scope decision; the `RealEnvAdapter` trait in
 [`crates/epica-benchmarks/src/real_adapters.rs`](./crates/epica-benchmarks/src/real_adapters.rs)
 is the seam for upgrading to real environments without changing the harness
-API.
+API, and its module header carries the cost / value reasoning.
 
 ### How to reproduce
 
