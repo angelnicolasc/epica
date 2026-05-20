@@ -1,0 +1,93 @@
+name: Neo4j integration
+
+# Closes TD-P8-004: brings the `--features neo4j` backend under a real CI
+# smoke test. The default CI workflow does not run this — it depends on a
+# service container, which raises the runtime cost from ~3min to ~6min and
+# materially changes the matrix.
+#
+# Triggers:
+#   - PRs that touch the Neo4j backend or its tests
+#   - Pushes to main with the same paths
+#   - Manual dispatch from the Actions tab
+#
+# What it asserts: the `#[ignore]`-by-default tests under
+# `crates/epica-memory/tests/neo4j_integration.rs` pass against a fresh
+# Neo4j 5.18 instance.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'crates/epica-memory/**'
+      - '.github/workflows/neo4j-integration.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'crates/epica-memory/**'
+      - '.github/workflows/neo4j-integration.yml'
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+
+concurrency:
+  group: neo4j-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  neo4j-smoke:
+    name: cargo test --features neo4j -- --ignored
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    services:
+      neo4j:
+        image: neo4j:5.18
+        ports:
+          - 7687:7687
+          - 7474:7474
+        env:
+          # Single-node test password; never reused outside CI.
+          NEO4J_AUTH: neo4j/test_password_ci_only
+          # Lower memory footprint to fit comfortably in a GHA runner.
+          NEO4J_server_memory_heap_initial__size: 512m
+          NEO4J_server_memory_heap_max__size: 1g
+        # GHA does not natively healthcheck custom services; we poll the
+        # Bolt port from the step below before running tests.
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain (stable)
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo registry and target
+        uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: epica-neo4j
+
+      - name: Wait for Neo4j Bolt port (max 60s)
+        run: |
+          for i in {1..30}; do
+            if nc -z 127.0.0.1 7687; then
+              echo "Bolt port open after ${i} attempts"
+              # Neo4j needs a moment after the port opens before queries
+              # are accepted; sleep covers the warmup grace period.
+              sleep 5
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "Bolt port never opened" >&2
+          exit 1
+
+      - name: cargo test (neo4j integration, ignored opt-in)
+        env:
+          EPICA_NEO4J_URI: bolt://127.0.0.1:7687
+          EPICA_NEO4J_USER: neo4j
+          EPICA_NEO4J_PASS: test_password_ci_only
+        run: |
+          cargo test -p epica-memory --features neo4j \
+            --test neo4j_integration --locked -- --ignored --nocapture
