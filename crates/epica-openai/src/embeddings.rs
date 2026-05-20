@@ -46,6 +46,7 @@ use serde_json::json;
 use tracing::{debug, instrument, warn};
 
 use epica_core::EmbeddingProvider;
+use epica_runtime::{EmbedError, Embedder};
 
 use crate::config::OpenAiConfig;
 
@@ -335,6 +336,58 @@ impl OpenAiEmbeddingProvider {
         let mut entries = parsed.data;
         entries.sort_by_key(|e| e.index);
         Ok(entries.into_iter().map(|e| e.embedding).collect())
+    }
+}
+
+/// Bridges the sync K\*6 path ([`EmbeddingProvider`]) and the async
+/// prospective-indexing path ([`Embedder`]) over a single cache.
+///
+/// `epica-runtime`'s [`Embedder`] trait is async because production embedding
+/// backends are network-bound. `epica-core`'s [`EmbeddingProvider`] is sync
+/// because it's called on the AGM hot path. The same `OpenAiEmbeddingProvider`
+/// satisfies both by:
+/// - serving `embed_cached` from the in-memory `HashMap` (sync, never blocks),
+/// - serving `embed` by short-circuiting to the cache on hit, otherwise
+///   awaiting `warm_async` to populate and re-reading.
+///
+/// One provider instance can therefore be `Arc`-shared between
+/// `BeliefQuad::set_embedding_provider` (K\*6) and
+/// `BeliefRuntime::with_embedder` (prospective). The cache is shared, so the
+/// LLM-generated scenarios from prospective indexing automatically warm the
+/// K\*6 path for those exact strings.
+///
+/// OpenAI's `text-embedding-3-*` models return unit-norm vectors, so the L2
+/// normalisation contract documented on `Embedder::embed` is upheld upstream
+/// — no client-side renormalisation is performed.
+#[async_trait::async_trait]
+impl Embedder for OpenAiEmbeddingProvider {
+    async fn embed(&self, text: &str) -> Result<Vec<f32>, EmbedError> {
+        if let Some(v) = self.embed_cached(text) {
+            return Ok(v);
+        }
+        self.warm_async(&[text]).await.map_err(map_embedding_error)?;
+        self.embed_cached(text).ok_or_else(|| {
+            EmbedError::Model(
+                "embedding missing from cache immediately after warm_async — provider returned 0 entries".into(),
+            )
+        })
+    }
+}
+
+/// Map an `OpenAiEmbeddingError` onto the runtime's narrower [`EmbedError`].
+///
+/// `RateLimited` is mapped to `Network` (retryable from the caller's
+/// perspective). `ClientError` / `Deserialize` / `Mismatch` are mapped to
+/// `Model` (caller should not retry — they signal a contract or auth issue).
+fn map_embedding_error(e: OpenAiEmbeddingError) -> EmbedError {
+    match e {
+        OpenAiEmbeddingError::Network(s) => EmbedError::Network(s),
+        OpenAiEmbeddingError::RateLimited => EmbedError::Network("rate limited".into()),
+        OpenAiEmbeddingError::ClientError(s) => EmbedError::Model(s),
+        OpenAiEmbeddingError::Deserialize(s) => EmbedError::Model(s),
+        OpenAiEmbeddingError::Mismatch { expected, got } => EmbedError::Model(format!(
+            "provider returned {got} embeddings for {expected} inputs"
+        )),
     }
 }
 

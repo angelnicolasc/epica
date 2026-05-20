@@ -7,9 +7,13 @@ use serde::Deserialize;
 use serde_json::json;
 use tracing::{debug, instrument, warn};
 
-use epica_runtime::{DiagnosticSignal, LlmClient, LlmClientError, System2Result};
+use epica_runtime::{
+    DiagnosticSignal, LlmClient, LlmClientError, ProspectiveClient,
+    ProspectiveClientError, RawProspectiveScenario, System2Result,
+};
 
 use crate::config::{OpenAiConfig, OpenAiConfigError};
+use crate::prompt::{build_prospective_message, generate_scenarios_function_schema};
 
 /// OpenAI Chat Completions API client implementing System 2 reflection.
 ///
@@ -179,6 +183,115 @@ impl OpenAiLlmClient {
             reasoning: parsed.reasoning,
         })
     }
+}
+
+// ── Phase 4: ProspectiveClient implementation ─────────────────────────────────
+
+/// Model used for write-time prospective indexing.
+///
+/// Mirrors the Anthropic side's choice of Haiku for the same role: scenario
+/// generation is high-volume and called synchronously on every
+/// `insert_belief()` with `prospect = true`, so a fast/cheap model dominates.
+/// `gpt-4o-mini` is the production-quality equivalent in the OpenAI catalog.
+const PROSPECTIVE_MODEL: &str = "gpt-4o-mini";
+
+#[async_trait::async_trait]
+impl ProspectiveClient for OpenAiLlmClient {
+    #[instrument(skip(self), fields(key = %belief_key))]
+    async fn generate_scenarios(
+        &self,
+        belief_key: &str,
+        belief_value_repr: &str,
+    ) -> Result<Vec<RawProspectiveScenario>, ProspectiveClientError> {
+        let url = format!("{}/v1/chat/completions", self.config.base_url);
+        let body = json!({
+            "model": PROSPECTIVE_MODEL,
+            "max_tokens": 512,
+            "messages": [{
+                "role": "user",
+                "content": build_prospective_message(belief_key, belief_value_repr),
+            }],
+            "tools": [generate_scenarios_function_schema()],
+            "tool_choice": {
+                "type": "function",
+                "function": { "name": "generate_scenarios" }
+            },
+        });
+
+        debug!(url = %url, "prospective: sending OpenAI scenario generation request");
+
+        let response = self
+            .http
+            .post(&url)
+            .bearer_auth(&self.config.api_key)
+            .header("content-type", "application/json")
+            .json(&body)
+            .send()
+            .await
+            .map_err(|e| ProspectiveClientError::Network(e.to_string()))?;
+
+        let status = response.status();
+        if status == reqwest::StatusCode::TOO_MANY_REQUESTS {
+            warn!("prospective: OpenAI rate limit hit");
+            return Err(ProspectiveClientError::RateLimited);
+        }
+        // `ProspectiveClientError` does not (yet) split 4xx/5xx the way
+        // `LlmClientError` does; both flow through `Network`. A future
+        // revision can widen the enum if write-time retry policy diverges
+        // from System 2's.
+        if !status.is_success() {
+            let text = response.text().await.unwrap_or_default();
+            return Err(ProspectiveClientError::Network(format!(
+                "HTTP {status}: {text}"
+            )));
+        }
+
+        let body: ChatCompletionResponse = response
+            .json()
+            .await
+            .map_err(|e| ProspectiveClientError::Deserialize(e.to_string()))?;
+
+        let call = body
+            .choices
+            .first()
+            .and_then(|c| c.message.tool_calls.first())
+            .filter(|c| c.function.name == "generate_scenarios")
+            .ok_or_else(|| {
+                ProspectiveClientError::Deserialize(
+                    "no generate_scenarios tool_call in OpenAI response".into(),
+                )
+            })?;
+
+        let parsed: ScenariosArgs = serde_json::from_str(&call.function.arguments)
+            .map_err(|e| ProspectiveClientError::Deserialize(e.to_string()))?;
+
+        let scenarios: Vec<RawProspectiveScenario> = parsed
+            .scenarios
+            .into_iter()
+            .map(|s| RawProspectiveScenario {
+                scenario: s.query,
+                // Causal-event extraction from free-form scenarios is the
+                // same out-of-scope concern as on the Anthropic side; left
+                // empty until a dedicated extraction pass lands.
+                causal_events: vec![],
+            })
+            .collect();
+
+        let scenario_count = scenarios.len();
+        debug!("prospective: OpenAI generated {scenario_count} scenarios for {belief_key}");
+
+        Ok(scenarios)
+    }
+}
+
+#[derive(Deserialize)]
+struct ScenariosArgs {
+    scenarios: Vec<ScenarioItem>,
+}
+
+#[derive(Deserialize)]
+struct ScenarioItem {
+    query: String,
 }
 
 // ── Prompt & schema ──────────────────────────────────────────────────────────
